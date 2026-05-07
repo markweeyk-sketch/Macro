@@ -192,6 +192,17 @@ function App() {
     FB.signOutUser();
   };
 
+  const totals = useMemo(() => {
+    let kcal = 0, p = 0, c = 0, f = 0;
+    log.forEach((it) => {
+      const food = foods.find((x) => x.id === it.foodId);
+      if (!food) return;
+      const n = window.MACRO_DATA.nutritionFor(food, it.grams);
+      kcal += n.kcal; p += n.p; c += n.c; f += n.f;
+    });
+    return { kcal, p, c, f };
+  }, [log, foods]);
+  
   // ─── Loading screen ────────────────────────────────────────────────────
   if (!authReady) {
     return (
@@ -204,16 +215,7 @@ function App() {
     );
   }
 
-  const totals = useMemo(() => {
-    let kcal = 0, p = 0, c = 0, f = 0;
-    log.forEach((it) => {
-      const food = foods.find((x) => x.id === it.foodId);
-      if (!food) return;
-      const n = window.MACRO_DATA.nutritionFor(food, it.grams);
-      kcal += n.kcal; p += n.p; c += n.c; f += n.f;
-    });
-    return { kcal, p, c, f };
-  }, [log, foods]);
+ 
 
   const addFood = (food, grams, unitIndex, meal) => {
     setLog((cur) => [
