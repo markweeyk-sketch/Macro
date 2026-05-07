@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Macro — Design Canvas</title>
+  <link rel="stylesheet" href="styles.css"/>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Fraunces:ital,wght@0,400;0,500;1,400;1,500&family=JetBrains+Mono&display=swap" rel="stylesheet"/>
+
+  <style>
+    /* Each artboard hosts its own scoped Macro app. The .app inside fills the artboard. */
+    .frame {
+      width: 100%; height: 100%;
+      overflow: hidden;
+      background: var(--bg);
+      border-radius: 0;
+      position: relative;
+      isolation: isolate;
+    }
+    .frame .app { min-height: 100%; }
+    .device-phone {
+      border-radius: 28px;
+      box-shadow: 0 0 0 1px var(--line-2), 0 30px 80px rgba(26,25,22,0.18);
+    }
+    .device-laptop {
+      border-radius: 12px;
+      box-shadow: 0 0 0 1px var(--line-2), 0 30px 80px rgba(26,25,22,0.18);
+    }
+    /* Scoped tokens so each frame paints in its own theme without polluting <html> */
+    .frame[data-theme="graphite"] {
+      --bg:#161513;--surface:#1F1E1B;--surface-2:#28261F;--ink:#F2EFE8;--ink-2:#B8B3A6;--ink-3:#6F6A60;
+      --line:rgba(255,255,255,0.08);--line-2:rgba(255,255,255,0.14);
+      --accent:#A8C97F;--accent-soft:#5C7A3E;--warn:#E08B5C;
+      --p-color:#D89770;--c-color:#A8C97F;--f-color:#E0C277;
+    }
+    .frame[data-theme="citrus"] {
+      --bg:#FBF7EF;--surface:#FFFFFF;--surface-2:#F2EBDB;--ink:#2A1F12;--ink-2:#5A4A38;--ink-3:#968673;
+      --accent:#D9633A;--accent-soft:#F2A878;--warn:#B8442C;
+      --p-color:#D9633A;--c-color:#C99A3A;--f-color:#8A7448;
+    }
+    .frame[data-theme="marine"] {
+      --bg:#EFF1F2;--surface:#FFFFFF;--surface-2:#E1E5E8;--ink:#1A2228;--ink-2:#4A5560;--ink-3:#8893A0;
+      --accent:#1F6B6B;--accent-soft:#6FB0AC;--warn:#C66A3A;
+      --p-color:#1F6B6B;--c-color:#5A8B9C;--f-color:#C9A24A;
+    }
+  </style>
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+  <script>window.__SKIP_AUTOMOUNT = true;</script>
+</head>
+<body>
+  <div id="root"></div>
+  <script src="data.js"></script>
+  <script type="text/babel" src="design-canvas.jsx"></script>
+  <script type="text/babel" src="tweaks-panel.jsx"></script>
+  <script type="text/babel" src="screens.jsx"></script>
+  <script type="text/babel" src="app.jsx"></script>
+  <script type="text/babel">
+    const { DesignCanvas, DCSection, DCArtboard, MacroApp } = window;
+
+    // Wrap MacroApp with frame-mode overrides via a small provider on window.__FRAME.
+    // Since multiple roots mount in sequence, we set window.__FRAME just before each
+    // root.render call so each App reads its own override.
+    function useFrameMount(opts) {
+      const ref = React.useRef(null);
+      React.useEffect(() => {
+        if (!ref.current) return;
+        // Stash override, render, restore.
+        const prev = window.__FRAME;
+        window.__FRAME = { ...opts, persist: false, hideTweaks: true, scopeTheme: true };
+        const root = ReactDOM.createRoot(ref.current);
+        root.render(<MacroApp/>);
+        window.__FRAME = prev;
+        return () => root.unmount();
+      }, []);
+      return ref;
+    }
+
+    function Frame({ route = 'today', theme = 'bone', layout, sheet, deviceClass = 'device-phone' }) {
+      const ref = useFrameMount({
+        route,
+        sheet,
+        meal: 'lunch',
+        tweaks: {
+          theme,
+          dashboardLayout:
+            (layout === 'rings' || layout === 'bars' || layout === 'minimal') ? layout : 'rings',
+        },
+      });
+      return (
+        <div className={`frame ${deviceClass}`} data-theme={theme === 'bone' ? '' : theme} ref={ref}/>
+      );
+    }
+
+    function CanvasApp() {
+      return (
+        <DesignCanvas>
+          <DCSection id="form-factors" title="Form factors"
+            subtitle="Same app, two layouts. Sidebar + rail on laptop. Bottom-nav stack on phone.">
+            <DCArtboard id="laptop" label="Laptop · 1280px" width={1280} height={780}>
+              <Frame route="today" deviceClass="device-laptop"/>
+            </DCArtboard>
+            <DCArtboard id="phone" label="Phone · 390px" width={390} height={780}>
+              <Frame route="today" deviceClass="device-phone"/>
+            </DCArtboard>
+          </DCSection>
+
+          <DCSection id="dashboard-layouts" title="Dashboard layouts"
+            subtitle="Three takes on the day's calorie summary — selectable in Tweaks.">
+            <DCArtboard id="rings" label="Ring — default" width={390} height={780}>
+              <Frame route="today" layout="rings"/>
+            </DCArtboard>
+            <DCArtboard id="bars" label="Big number + bar" width={390} height={780}>
+              <Frame route="today" layout="bars"/>
+            </DCArtboard>
+            <DCArtboard id="minimal" label="Editorial · minimal" width={390} height={780}>
+              <Frame route="today" layout="minimal"/>
+            </DCArtboard>
+          </DCSection>
+
+          <DCSection id="themes" title="Color themes"
+            subtitle="Bone (default warm), Graphite (dark), Citrus (persimmon), Marine (cool teal).">
+            <DCArtboard id="bone" label="Bone" width={390} height={780}>
+              <Frame theme="bone"/>
+            </DCArtboard>
+            <DCArtboard id="graphite" label="Graphite" width={390} height={780}>
+              <Frame theme="graphite"/>
+            </DCArtboard>
+            <DCArtboard id="citrus" label="Citrus" width={390} height={780}>
+              <Frame theme="citrus"/>
+            </DCArtboard>
+            <DCArtboard id="marine" label="Marine" width={390} height={780}>
+              <Frame theme="marine"/>
+            </DCArtboard>
+          </DCSection>
+
+          <DCSection id="screens" title="Key screens"
+            subtitle="Core flows in mobile form factor.">
+            <DCArtboard id="log" label="Food log" width={390} height={780}>
+              <Frame route="log"/>
+            </DCArtboard>
+            <DCArtboard id="plan" label="Meal plan · week" width={520} height={780}>
+              <Frame route="plan"/>
+            </DCArtboard>
+            <DCArtboard id="recipes" label="Recipes" width={390} height={780}>
+              <Frame route="recipes"/>
+            </DCArtboard>
+            <DCArtboard id="progress" label="Progress" width={390} height={780}>
+              <Frame route="progress"/>
+            </DCArtboard>
+          </DCSection>
+
+          <DCSection id="interactions" title="Sheets & overlays"
+            subtitle="Add-food (search → confirm → log) and Goal-setup.">
+            <DCArtboard id="add" label="Add food · frequent" width={390} height={780}>
+              <Frame route="today" sheet="add"/>
+            </DCArtboard>
+            <DCArtboard id="goal" label="Goal setup" width={390} height={780}>
+              <Frame route="today" sheet="goal"/>
+            </DCArtboard>
+          </DCSection>
+        </DesignCanvas>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<CanvasApp/>);
+  </script>
+</body>
+</html>
