@@ -1,12 +1,15 @@
 // Macro — minimal service worker. App-shell cache so the PWA opens offline.
-const CACHE = 'macro-v1';
+const CACHE = 'macro-v2';
 const ASSETS = [
   './',
   './index.html',
   './styles.css',
   './data.js',
-  './app.jsx',
+  './firebase.js',
+  './tweaks-panel.jsx',
   './screens.jsx',
+  './auth.jsx',
+  './app.jsx',
   './manifest.webmanifest',
   './icon-192.svg',
   './icon-512.svg',

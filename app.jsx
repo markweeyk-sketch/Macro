@@ -3,6 +3,9 @@
 
 const { useState, useEffect, useMemo, useRef } = React;
 
+// Yield to the event loop so React flushes state before we read refs in effects.
+const tick = () => new Promise(r => setTimeout(r, 50));
+
 // ─────────────────────────────────────────────────────────────
 // Persistent state hook (localStorage)
 // ─────────────────────────────────────────────────────────────
@@ -43,11 +46,23 @@ const THEME_PALETTES = THEME_KEYS.map((k) => THEMES[k].swatch);
 // ─────────────────────────────────────────────────────────────
 function App() {
   const D = window.MACRO_DATA;
+  const FB = window.MACRO_FIREBASE;
   const F = window.__FRAME || {};                   // URL-param overrides for canvas frames
   const persist = F.persist !== false;              // canvas frames disable persistence
   const useStateOrPersist = (k, init) => persist
     ? usePersistent(k, init)
     : useState(init);
+
+  // ─── Auth ──────────────────────────────────────────────────────────────
+  const [user, setUser]           = useState(null);
+  const [authReady, setAuthReady] = useState(!FB || !persist);
+  const [showAuth, setShowAuth]   = useState(false);
+  const [showMigrate, setShowMigrate] = useState(false);
+  const pendingUserRef = useRef(null); // user awaiting migration decision
+  const syncRef  = useRef(false);      // true → safe to write to Firestore
+  const userRef  = useRef(null);       // mirrors user for use inside effects
+
+  // ─── App state ─────────────────────────────────────────────────────────
   const [route, setRoute] = useState(F.route || 'today');
   const [log, setLog] = useStateOrPersist('macro.log.v2', D.TODAY_LOG);
   const [goal, setGoal] = useStateOrPersist('macro.goal.v2', D.GOAL);
@@ -70,6 +85,124 @@ function App() {
     if (attr) target.setAttribute('data-theme', attr);
     else target.removeAttribute('data-theme');
   }, [tweaks.theme]);
+
+  // ─── Firebase auth listener ────────────────────────────────────────────
+  useEffect(() => {
+    if (!FB || !persist) return;
+    const today = FB.todayKey();
+    return FB.auth.onAuthStateChanged(async (u) => {
+      userRef.current = u;
+      if (u) {
+        syncRef.current = false;
+        try {
+          const [userData, dayEntries] = await Promise.all([
+            FB.loadUserData(u.uid),
+            FB.loadDayLog(u.uid, today),
+          ]);
+          if (userData) {
+            // Cloud data exists — it wins.
+            if (userData.goal)    setGoal(userData.goal);
+            if (userData.recipes) setRecipes(userData.recipes);
+            setLog(dayEntries ?? []);
+            await tick(); // let React flush before enabling sync
+            syncRef.current = true;
+          } else {
+            // New account — offer to migrate existing local data.
+            const hasLocal =
+              !!localStorage.getItem('macro.log.v2') ||
+              !!localStorage.getItem('macro.goal.v2');
+            if (hasLocal) {
+              pendingUserRef.current = u;
+              setUser(u);
+              setShowMigrate(true);
+              setAuthReady(true);
+              return; // sync stays off until migration resolves
+            }
+            // Truly new — push defaults to cloud.
+            setLog([]);
+            await tick();
+            await Promise.all([
+              FB.saveGoal(u.uid, D.GOAL),
+              FB.saveRecipes(u.uid, D.RECIPES),
+              FB.saveDayLog(u.uid, today, []),
+            ]);
+            syncRef.current = true;
+          }
+        } catch (e) {
+          console.error('[Macro] Firebase load error:', e);
+          syncRef.current = true;
+        }
+        setUser(u);
+      } else {
+        syncRef.current = false;
+        userRef.current = null;
+        setUser(null);
+      }
+      setAuthReady(true);
+    });
+  }, []);
+
+  // ─── Firestore sync (fires only once sync is enabled) ─────────────────
+  useEffect(() => {
+    const uid = userRef.current?.uid;
+    if (!syncRef.current || !uid) return;
+    FB.saveDayLog(uid, FB.todayKey(), log).catch(() => {});
+  }, [log]);
+
+  useEffect(() => {
+    const uid = userRef.current?.uid;
+    if (!syncRef.current || !uid) return;
+    FB.saveGoal(uid, goal).catch(() => {});
+  }, [goal]);
+
+  useEffect(() => {
+    const uid = userRef.current?.uid;
+    if (!syncRef.current || !uid) return;
+    FB.saveRecipes(uid, recipes).catch(() => {});
+  }, [recipes]);
+
+  // ─── Migration handler ─────────────────────────────────────────────────
+  const handleMigrate = async (doMigrate) => {
+    const u = pendingUserRef.current;
+    pendingUserRef.current = null;
+    const today = FB.todayKey();
+    if (doMigrate) {
+      // Upload current local state as-is.
+      await Promise.all([
+        FB.saveGoal(u.uid, goal),
+        FB.saveRecipes(u.uid, recipes),
+        FB.saveDayLog(u.uid, today, log),
+      ]);
+    } else {
+      // Reset to defaults, then push those.
+      setLog([]); setGoal(D.GOAL); setRecipes(D.RECIPES);
+      await tick();
+      await Promise.all([
+        FB.saveGoal(u.uid, D.GOAL),
+        FB.saveRecipes(u.uid, D.RECIPES),
+        FB.saveDayLog(u.uid, today, []),
+      ]);
+    }
+    syncRef.current = true;
+    setShowMigrate(false);
+  };
+
+  const handleSignOut = () => {
+    syncRef.current = false;
+    FB.signOutUser();
+  };
+
+  // ─── Loading screen ────────────────────────────────────────────────────
+  if (!authReady) {
+    return (
+      <div style={{ height: '100dvh', display: 'grid', placeItems: 'center', background: 'var(--bg)' }}>
+        <div style={{ textAlign: 'center' }}>
+          <div className="brand-mark" style={{ margin: '0 auto 14px', width: 40, height: 40, fontSize: 24 }}>M</div>
+          <div style={{ fontSize: 13, color: 'var(--ink-3)' }}>Loading…</div>
+        </div>
+      </div>
+    );
+  }
 
   const totals = useMemo(() => {
     let kcal = 0, p = 0, c = 0, f = 0;
@@ -107,8 +240,10 @@ function App() {
 
   return (
     <div className="app" ref={themeScopeRef}>
-      <Sidebar route={route} setRoute={setRoute} goal={goal} totals={totals}/>
-      <TopBar setRoute={setRoute} route={route}/>
+      <Sidebar route={route} setRoute={setRoute} goal={goal} totals={totals}
+               user={user} onSignIn={() => setShowAuth(true)} onSignOut={handleSignOut}/>
+      <TopBar setRoute={setRoute} route={route}
+              user={user} onSignIn={() => setShowAuth(true)}/>
       <main className="content">
         {route === 'today'    && <TodayPage {...props}/>}
         {route === 'log'      && <LogPage {...props}/>}
@@ -128,6 +263,12 @@ function App() {
         open={sheet?.kind === 'goal'} onClose={() => setSheet(null)}
         goal={goal} onSave={setGoal}
       />
+      <AuthSheet open={showAuth} onClose={() => setShowAuth(false)}/>
+      <MigrateSheet
+        open={showMigrate}
+        onMigrate={() => handleMigrate(true)}
+        onSkip={() => handleMigrate(false)}
+      />
 
       {!F.hideTweaks && <TweaksPanelUI tweaks={tweaks} setTweak={setTweak}/>}
     </div>
@@ -145,7 +286,7 @@ function mealNow() {
 // ─────────────────────────────────────────────────────────────
 // Sidebar (desktop)
 // ─────────────────────────────────────────────────────────────
-function Sidebar({ route, setRoute, goal, totals }) {
+function Sidebar({ route, setRoute, goal, totals, user, onSignIn, onSignOut }) {
   const items = [
     { id: 'today',    label: 'Today',     icon: 'home' },
     { id: 'log',      label: 'Food log',  icon: 'book' },
@@ -204,11 +345,29 @@ function Sidebar({ route, setRoute, goal, totals }) {
       </button>
 
       <div className="sidebar-foot">
-        <div className="avatar">A</div>
-        <div>
-          <div style={{ fontSize: 13, fontWeight: 500 }}>Alex Rivera</div>
-          <div style={{ fontSize: 11, color: 'var(--ink-3)' }}>Pro · Day {goal.streak}</div>
+        <div className="avatar">
+          {user
+            ? (user.displayName?.[0] || user.email?.[0] || '?').toUpperCase()
+            : '?'}
         </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 13, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {user ? (user.displayName || user.email) : 'Guest'}
+          </div>
+          <div style={{ fontSize: 11, color: 'var(--ink-3)' }}>
+            {user ? `Pro · Day ${goal.streak}` : 'Not signed in'}
+          </div>
+        </div>
+        {user
+          ? (
+            <button className="icon-btn" onClick={onSignOut} title="Sign out"
+                    style={{ width: 30, height: 30, boxShadow: 'none', flexShrink: 0 }}>
+              <Icon name="arrowR" size={14}/>
+            </button>
+          ) : (
+            <button className="btn sm" onClick={onSignIn}>Sign in</button>
+          )
+        }
       </div>
     </aside>
   );
@@ -217,7 +376,7 @@ function Sidebar({ route, setRoute, goal, totals }) {
 // ─────────────────────────────────────────────────────────────
 // Top bar (mobile only)
 // ─────────────────────────────────────────────────────────────
-function TopBar({ route, setRoute }) {
+function TopBar({ route, setRoute, user, onSignIn }) {
   const titles = {
     today: 'Today', log: 'Food log', plan: 'Meal plan', recipes: 'Recipes', progress: 'Progress',
   };
@@ -231,7 +390,10 @@ function TopBar({ route, setRoute }) {
       </div>
       <div className="topbar-actions">
         <button className="icon-btn"><Icon name="search" size={16}/></button>
-        <button className="icon-btn"><Icon name="user" size={16}/></button>
+        {user
+          ? <button className="icon-btn"><Icon name="user" size={16}/></button>
+          : <button className="btn sm" onClick={onSignIn}>Sign in</button>
+        }
       </div>
     </div>
   );
