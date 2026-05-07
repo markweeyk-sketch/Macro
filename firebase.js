@@ -3,14 +3,19 @@
 (function () {
   if (typeof firebase === 'undefined') return;
 
-  firebase.initializeApp({
-    apiKey: "AIzaSyDiJQgRtfXfE2_QZcEsxAGr_dsf8GHjBJo",
-    authDomain: "macro-7f7d4.firebaseapp.com",
-    projectId: "macro-7f7d4",
-    storageBucket: "macro-7f7d4.firebasestorage.app",
-    messagingSenderId: "717301516879",
-    appId: "1:717301516879:web:24cde33709631feb4f783a",
-  });
+  try {
+    firebase.initializeApp({
+      apiKey: "AIzaSyDiJQgRtfXfE2_QZcEsxAGr_dsf8GHjBJo",
+      authDomain: "macro-7f7d4.firebaseapp.com",
+      projectId: "macro-7f7d4",
+      storageBucket: "macro-7f7d4.firebasestorage.app",
+      messagingSenderId: "717301516879",
+      appId: "1:717301516879:web:24cde33709631feb4f783a",
+    });
+  } catch (e) {
+    console.warn('[Macro] Firebase init failed:', e);
+    return;
+  }
 
   const auth = firebase.auth();
   const db   = firebase.firestore();
