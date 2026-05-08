@@ -41,14 +41,15 @@ const Icon = ({ name, size = 18, stroke = 1.6 }) => {
 // ─────────────────────────────────────────────────────────────
 // Calorie ring
 // ─────────────────────────────────────────────────────────────
-function CalorieRing({ consumed, goal, size = 220, thickness = 14, mode = 'lose' }) {
+function CalorieRing({ consumed, goal, size = 220, thickness = 14, mode = 'lose', onClick }) {
   const r = (size - thickness) / 2;
   const c = 2 * Math.PI * r;
   const pct = Math.max(0, Math.min(consumed / goal, 1.15));
   const remaining = goal - consumed;
   const overGoal = mode === 'lose' && remaining < 0;
   return (
-    <div className="ring" style={{ '--size': `${size}px`, '--thickness': `${thickness}px` }}>
+    <div className="ring" onClick={onClick}
+         style={{ '--size': `${size}px`, '--thickness': `${thickness}px`, cursor: onClick ? 'pointer' : undefined }}>
       <svg viewBox={`0 0 ${size} ${size}`}>
         <circle cx={size/2} cy={size/2} r={r} fill="none" strokeWidth={thickness}
                 className="track" strokeLinecap="round"/>
@@ -717,6 +718,186 @@ function NumField({ label, value, suffix, onChange }) {
 }
 
 // ─────────────────────────────────────────────────────────────
+// Goal calculation (Mifflin-St Jeor + TDEE)
+// ─────────────────────────────────────────────────────────────
+function calcGoal({ sex, age, heightCm, currentKg, targetKg, activity, mode }) {
+  const bmr = sex === 'male'
+    ? 10 * currentKg + 6.25 * heightCm - 5 * age + 5
+    : 10 * currentKg + 6.25 * heightCm - 5 * age - 161;
+  const multipliers = { sedentary: 1.2, light: 1.375, moderate: 1.55, active: 1.725, 'very-active': 1.9 };
+  const tdee = bmr * (multipliers[activity] || 1.55);
+  const offset = mode === 'lose' ? -500 : mode === 'gain' ? 300 : 0;
+  const kcal = Math.max(1200, Math.round(tdee + offset));
+  // 30% protein / 40% carbs / 30% fat
+  const protein = Math.round((kcal * 0.30) / 4);
+  const carbs   = Math.round((kcal * 0.40) / 4);
+  const fat     = Math.round((kcal * 0.30) / 9);
+  return {
+    mode, kcal, protein, carbs, fat,
+    weightKg: mode === 'maintain' ? currentKg : (targetKg || currentKg),
+    startKg: currentKg, currentKg,
+    streak: 0, stepsGoal: 8000, onboarded: true,
+  };
+}
+
+// ─────────────────────────────────────────────────────────────
+// Onboarding sheet — first-run goal setup
+// ─────────────────────────────────────────────────────────────
+function OnboardingSheet({ open, onComplete }) {
+  const [sex,       setSex]       = useState('male');
+  const [age,       setAge]       = useState(28);
+  const [heightCm,  setHeightCm]  = useState(175);
+  const [currentKg, setCurrentKg] = useState(75);
+  const [targetKg,  setTargetKg]  = useState(70);
+  const [activity,  setActivity]  = useState('moderate');
+  const [mode,      setMode]      = useState('lose');
+
+  if (!open) return null;
+
+  const calculated = calcGoal({ sex, age: +age, heightCm: +heightCm, currentKg: +currentKg, targetKg: +targetKg, activity, mode });
+
+  const activityOptions = [
+    { v: 'sedentary',   l: 'Sedentary',   s: 'Desk job, little exercise' },
+    { v: 'light',       l: 'Light',        s: '1–3 workouts / week' },
+    { v: 'moderate',    l: 'Moderate',     s: '3–5 workouts / week' },
+    { v: 'active',      l: 'Active',       s: '6–7 workouts / week' },
+    { v: 'very-active', l: 'Very active',  s: 'Hard exercise or physical job' },
+  ];
+
+  return (
+    <>
+      <div className="sheet-bg"/>
+      <div className="sheet">
+        <div className="sheet-grab"/>
+        <div className="sheet-hd">
+          <div>
+            <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.14em', color: 'var(--ink-3)' }}>
+              Welcome to Macro
+            </div>
+            <div className="serif" style={{ fontSize: 24 }}>Set up your goal</div>
+          </div>
+        </div>
+        <div className="sheet-body">
+
+          {/* Sex */}
+          <div style={{ marginBottom: 18 }}>
+            <div className="eyebrow" style={{ marginBottom: 8 }}>Sex</div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              {['male','female'].map((s) => (
+                <button key={s} onClick={() => setSex(s)} className="chip"
+                  style={{
+                    flex: 1, justifyContent: 'center', padding: '10px 0',
+                    textTransform: 'capitalize',
+                    background: sex === s ? 'var(--ink)' : 'var(--surface-2)',
+                    color:      sex === s ? 'var(--bg)'  : 'var(--ink-2)',
+                  }}>
+                  {s}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Age + Height */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 18 }}>
+            <NumField label="Age" value={age} suffix="yrs" onChange={setAge}/>
+            <NumField label="Height" value={heightCm} suffix="cm" onChange={setHeightCm}/>
+          </div>
+
+          {/* Weights */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 18 }}>
+            <NumField label="Current weight" value={currentKg} suffix="kg" onChange={setCurrentKg}/>
+            <NumField label="Target weight"  value={targetKg}  suffix="kg" onChange={setTargetKg}/>
+          </div>
+
+          {/* Activity level */}
+          <div style={{ marginBottom: 18 }}>
+            <div className="eyebrow" style={{ marginBottom: 8 }}>Activity level</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {activityOptions.map(({ v, l, s }) => (
+                <button key={v} onClick={() => setActivity(v)} style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  padding: '11px 14px', borderRadius: 12, textAlign: 'left',
+                  background: activity === v ? 'var(--ink)' : 'var(--surface-2)',
+                  color:      activity === v ? 'var(--bg)'  : 'var(--ink)',
+                  transition: 'background 100ms',
+                }}>
+                  <div>
+                    <div style={{ fontSize: 14, fontWeight: 500 }}>{l}</div>
+                    <div style={{ fontSize: 12, opacity: 0.65, marginTop: 1 }}>{s}</div>
+                  </div>
+                  {activity === v && <Icon name="check" size={15}/>}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Goal mode */}
+          <div style={{ marginBottom: 20 }}>
+            <div className="eyebrow" style={{ marginBottom: 8 }}>Goal</div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
+              {[
+                { id: 'lose',     label: 'Lose',     hint: '−0.5 kg/wk' },
+                { id: 'maintain', label: 'Maintain', hint: 'steady' },
+                { id: 'gain',     label: 'Gain',     hint: '+0.3 kg/wk' },
+              ].map((m) => (
+                <button key={m.id} onClick={() => setMode(m.id)} style={{
+                  padding: '14px 10px', borderRadius: 16, textAlign: 'center',
+                  background: mode === m.id ? 'var(--ink)' : 'var(--surface-2)',
+                  color:      mode === m.id ? 'var(--bg)'  : 'var(--ink)',
+                  transition: 'background 100ms',
+                }}>
+                  <div className="serif" style={{ fontSize: 18 }}>{m.label}</div>
+                  <div style={{ fontSize: 11, marginTop: 2, opacity: 0.7 }}>{m.hint}</div>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Live calculation preview */}
+          <div style={{ background: 'var(--surface-2)', borderRadius: 16, padding: 18 }}>
+            <div className="between" style={{ marginBottom: 14 }}>
+              <div>
+                <div className="eyebrow">Your daily target</div>
+                <div className="numeric" style={{ fontSize: 42 }}>{calculated.kcal}</div>
+                <div style={{ fontSize: 12, color: 'var(--ink-3)', marginTop: 2 }}>kcal / day</div>
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--ink-3)', textAlign: 'right', maxWidth: 130, lineHeight: 1.5 }}>
+                Based on your stats &amp; activity
+              </div>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
+              {[
+                { label: 'Protein', v: calculated.protein, c: 'var(--p-color)' },
+                { label: 'Carbs',   v: calculated.carbs,   c: 'var(--c-color)' },
+                { label: 'Fat',     v: calculated.fat,     c: 'var(--f-color)' },
+              ].map((m) => (
+                <div key={m.label} style={{ background: 'var(--surface)', borderRadius: 12, padding: 10, textAlign: 'center' }}>
+                  <div className="numeric" style={{ fontSize: 22, color: m.c }}>{m.v}g</div>
+                  <div style={{
+                    fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.1em',
+                    color: 'var(--ink-3)', marginTop: 2,
+                  }}>{m.label}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+        </div>
+        <div className="sheet-foot" style={{ flexDirection: 'column', gap: 8 }}>
+          <button className="btn" style={{ width: '100%' }} onClick={() => onComplete(calculated)}>
+            Create my plan
+          </button>
+          <button style={{ fontSize: 13, color: 'var(--ink-3)', padding: '6px 0', textAlign: 'center' }}
+                  onClick={() => onComplete(null)}>
+            Skip for now
+          </button>
+        </div>
+      </div>
+    </>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
 // Settings sheet helpers
 // ─────────────────────────────────────────────────────────────
 function SettingsGroup({ label, children }) {
@@ -1016,5 +1197,5 @@ function ProfileSheet({ open, onClose, user, goal, onOpenGoal, onSignOut }) {
 Object.assign(window, {
   Icon, CalorieRing, MacroBars, MacroDonut, WeightChart, StepBars,
   QuickLog, MealSection, AddFoodSheet, GoalSheet,
-  SettingsSheet, ProfileSheet,
+  SettingsSheet, ProfileSheet, OnboardingSheet, calcGoal,
 });

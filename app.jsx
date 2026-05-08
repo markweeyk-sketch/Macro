@@ -41,6 +41,13 @@ const THEMES = {
 const THEME_KEYS = ['bone','graphite','citrus','marine'];
 const THEME_PALETTES = THEME_KEYS.map((k) => THEMES[k].swatch);
 
+// Blank goal for new users — onboarded:false triggers the onboarding sheet.
+const DEFAULT_GOAL = {
+  mode: 'maintain', kcal: 2000, protein: 150, carbs: 200, fat: 67,
+  weightKg: 70, startKg: 70, currentKg: 70, streak: 0, stepsGoal: 8000,
+  onboarded: false,
+};
+
 // ─────────────────────────────────────────────────────────────
 // Shell
 // ─────────────────────────────────────────────────────────────
@@ -66,8 +73,8 @@ function App() {
 
   // ─── App state ─────────────────────────────────────────────────────────
   const [route, setRoute] = useState(F.route || 'today');
-  const [log, setLog] = useStateOrPersist('macro.log.v2', D.TODAY_LOG);
-  const [goal, setGoal] = useStateOrPersist('macro.goal.v2', D.GOAL);
+  const [log, setLog] = useStateOrPersist('macro.log.v2', []);
+  const [goal, setGoal] = useStateOrPersist('macro.goal.v2', DEFAULT_GOAL);
   const [foods] = useState(D.FOODS);
   const [recipes, setRecipes] = useStateOrPersist('macro.recipes', D.RECIPES);
   const [sheet, setSheet] = useState(
@@ -120,15 +127,8 @@ function App() {
               setAuthReady(true);
               return; // sync stays off until migration resolves
             }
-            // Truly new — push defaults to cloud.
-            setLog([]);
-            await tick();
-            await Promise.all([
-              FB.saveGoal(u.uid, D.GOAL),
-              FB.saveRecipes(u.uid, D.RECIPES),
-              FB.saveDayLog(u.uid, today, []),
-            ]);
-            syncRef.current = true;
+            // Truly new — show onboarding before seeding cloud.
+            pendingUserRef.current = u;
           }
         } catch (e) {
           console.error('[Macro] Firebase load error:', e);
@@ -169,29 +169,55 @@ function App() {
     pendingUserRef.current = null;
     const today = FB.todayKey();
     if (doMigrate) {
-      // Upload current local state as-is.
+      // Upload current local state, mark as onboarded.
+      const migratedGoal = { ...goal, onboarded: true };
+      setGoal(migratedGoal);
+      await tick();
       await Promise.all([
-        FB.saveGoal(u.uid, goal),
+        FB.saveGoal(u.uid, migratedGoal),
         FB.saveRecipes(u.uid, recipes),
         FB.saveDayLog(u.uid, today, log),
       ]);
+      syncRef.current = true;
     } else {
-      // Reset to defaults, then push those.
-      setLog([]); setGoal(D.GOAL); setRecipes(D.RECIPES);
+      // Start fresh — onboarding will run once migration sheet closes.
+      setLog([]); setGoal(DEFAULT_GOAL); setRecipes(D.RECIPES);
+      pendingUserRef.current = u; // keep ref so handleOnboarding can seed Firebase
       await tick();
+      // Seed a placeholder so the account exists in Firestore
       await Promise.all([
-        FB.saveGoal(u.uid, D.GOAL),
+        FB.saveGoal(u.uid, DEFAULT_GOAL),
         FB.saveRecipes(u.uid, D.RECIPES),
         FB.saveDayLog(u.uid, today, []),
       ]);
+      // Leave syncRef false — handleOnboarding enables it after goal is set
     }
-    syncRef.current = true;
     setShowMigrate(false);
   };
 
   const handleSignOut = () => {
     syncRef.current = false;
     FB.signOutUser();
+  };
+
+  // ─── Onboarding handler ────────────────────────────────────────────────
+  const handleOnboarding = async (calculatedGoal) => {
+    const goalWithFlag = calculatedGoal
+      ? { ...calculatedGoal, onboarded: true }
+      : { ...DEFAULT_GOAL,   onboarded: true };
+    setGoal(goalWithFlag);
+    setLog([]);
+    const u = pendingUserRef.current;
+    if (!u) return; // guest — usePersistent handles persistence
+    pendingUserRef.current = null;
+    const today = FB?.todayKey();
+    await tick();
+    await Promise.all([
+      FB.saveGoal(u.uid, goalWithFlag),
+      FB.saveRecipes(u.uid, D.RECIPES),
+      FB.saveDayLog(u.uid, today, []),
+    ]);
+    syncRef.current = true;
   };
 
   const totals = useMemo(() => {
@@ -205,6 +231,10 @@ function App() {
     return { kcal, p, c, f };
   }, [log, foods]);
   
+  // Onboarding fires for any user (guest or signed-in) whose goal.onboarded is
+  // strictly false — meaning they used DEFAULT_GOAL, not old data lacking the field.
+  const needsOnboarding = goal.onboarded === false && !showMigrate;
+
   // ─── Loading screen ────────────────────────────────────────────────────
   if (!authReady) {
     return (
@@ -239,7 +269,7 @@ function App() {
     addFood, removeLog,
     openAdd: (meal) => setSheet({ kind: 'add', meal }),
     openGoal: () => setSheet({ kind: 'goal' }),
-    tweaks,
+    tweaks, user,
   };
 
   return (
@@ -290,6 +320,10 @@ function App() {
         user={user} goal={goal}
         onOpenGoal={() => { setShowProfile(false); setSheet({ kind: 'goal' }); }}
         onSignOut={() => { setShowProfile(false); handleSignOut(); }}
+      />
+      <OnboardingSheet
+        open={needsOnboarding}
+        onComplete={handleOnboarding}
       />
 
       {!F.hideTweaks && <TweaksPanelUI tweaks={tweaks} setTweak={setTweak}/>}
@@ -522,15 +556,18 @@ function RightRail({ goal, totals, log, foods, openAdd, frequent, addFood, setRo
 // Today page (dashboard)
 // ─────────────────────────────────────────────────────────────
 function TodayPage(props) {
-  const { goal, totals, log, foods, frequent, addFood, removeLog, openAdd, openGoal, tweaks } = props;
+  const { goal, totals, log, foods, frequent, addFood, removeLog, openAdd, openGoal, tweaks, user } = props;
   const today = new Date().toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' });
+  const firstName = user?.displayName?.split(' ')[0] || user?.email?.split('@')[0] || null;
 
   return (
     <div className="stack" style={{ paddingTop: 8 }}>
       <header className="page-head">
         <div>
           <div className="eyebrow">{today}</div>
-          <h1 className="page-title">Good morning,<br/><em>Alex</em>.</h1>
+          <h1 className="page-title">
+            {firstName ? <>Good morning,<br/><em>{firstName}</em>.</> : <>Today's<br/><em>progress</em>.</>}
+          </h1>
         </div>
         <div style={{ display: 'none' }} className="desktop-only-flex">
           <button className="btn ghost" onClick={openGoal}>
@@ -548,16 +585,16 @@ function TodayPage(props) {
             gap: 28,
             alignItems: 'center',
           }}>
-            <CalorieRing consumed={totals.kcal} goal={goal.kcal} mode={goal.mode}/>
+            <CalorieRing consumed={totals.kcal} goal={goal.kcal} mode={goal.mode} onClick={openGoal}/>
             <div style={{ minWidth: 0 }}>
-              <div className="between" style={{ marginBottom: 16 }}>
-                <div>
-                  <div className="eyebrow">Goal · {goal.mode === 'lose' ? 'Lose 0.5kg/wk' : goal.mode === 'gain' ? 'Gain 0.4kg/wk' : 'Maintain'}</div>
+              <div style={{ marginBottom: 16 }}>
+                <div className="eyebrow">Goal · {goal.mode === 'lose' ? 'Lose 0.5kg/wk' : goal.mode === 'gain' ? 'Gain 0.4kg/wk' : 'Maintain'}</div>
+                <div className="between">
                   <div className="serif" style={{ fontSize: 22 }}>{goal.kcal} kcal</div>
+                  <button onClick={openGoal} style={{ fontSize: 12, color: 'var(--ink-3)', display: 'flex', alignItems: 'center', gap: 4 }}>
+                    Edit goal <Icon name="chevron" size={11}/>
+                  </button>
                 </div>
-                <button className="chip" onClick={openGoal}>
-                  <Icon name="settings" size={12}/> Adjust
-                </button>
               </div>
               <MacroBars totals={totals} goal={goal}/>
             </div>
@@ -581,6 +618,9 @@ function TodayPage(props) {
                 <div className="numeric" style={{ fontSize: 32 }}>
                   {Math.max(0, Math.round(goal.kcal - totals.kcal))}
                 </div>
+                <button onClick={openGoal} style={{ fontSize: 12, color: 'var(--ink-3)', display: 'flex', alignItems: 'center', gap: 4, marginTop: 4, justifyContent: 'flex-end' }}>
+                  Edit goal <Icon name="chevron" size={11}/>
+                </button>
               </div>
             </div>
             <div style={{
@@ -602,15 +642,21 @@ function TodayPage(props) {
             <div className="eyebrow" style={{ marginBottom: 10 }}>
               {Math.round(goal.kcal - totals.kcal) >= 0 ? 'Remaining today' : 'Over goal by'}
             </div>
-            <div className="numeric" style={{
+            <div className="numeric" onClick={openGoal} style={{
               fontSize: 'clamp(80px, 14vw, 140px)',
               lineHeight: 0.9,
               letterSpacing: '-0.04em',
+              cursor: 'pointer',
             }}>
               {Math.abs(Math.round(goal.kcal - totals.kcal))}
             </div>
-            <div style={{ fontSize: 13, color: 'var(--ink-3)', marginTop: 6 }}>
-              of {goal.kcal} kcal · {Math.round(totals.kcal)} consumed
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, marginTop: 8 }}>
+              <span style={{ fontSize: 13, color: 'var(--ink-3)' }}>
+                of {goal.kcal} kcal · {Math.round(totals.kcal)} consumed
+              </span>
+              <button onClick={openGoal} style={{ fontSize: 12, color: 'var(--ink-3)', display: 'flex', alignItems: 'center', gap: 3 }}>
+                Edit <Icon name="chevron" size={11}/>
+              </button>
             </div>
             <div style={{ marginTop: 24, display: 'flex', justifyContent: 'center' }}>
               <MacroDonut totals={totals} goal={goal}/>
