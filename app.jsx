@@ -48,6 +48,10 @@ const DEFAULT_GOAL = {
   onboarded: false,
 };
 
+const EMPTY_WEEK_PLAN = Array.from({ length: 7 }, () => ({
+  breakfast: null, lunch: null, dinner: null, snack: null,
+}));
+
 // ─────────────────────────────────────────────────────────────
 // Shell
 // ─────────────────────────────────────────────────────────────
@@ -77,6 +81,7 @@ function App() {
   const [goal, setGoal] = useStateOrPersist('macro.goal.v2', DEFAULT_GOAL);
   const [foods] = useState(D.FOODS);
   const [recipes, setRecipes] = useStateOrPersist('macro.recipes', D.RECIPES);
+  const [weekPlan, setWeekPlan] = useStateOrPersist('macro.plan.v1', EMPTY_WEEK_PLAN);
   const [sheet, setSheet] = useState(
     F.sheet === 'add'  ? { kind: 'add', meal: F.meal || 'lunch' } :
     F.sheet === 'goal' ? { kind: 'goal' } : null
@@ -110,8 +115,9 @@ function App() {
           ]);
           if (userData) {
             // Cloud data exists — it wins.
-            if (userData.goal)    setGoal(userData.goal);
-            if (userData.recipes) setRecipes(userData.recipes);
+            if (userData.goal)     setGoal(userData.goal);
+            if (userData.recipes)  setRecipes(userData.recipes);
+            if (userData.weekPlan) setWeekPlan(userData.weekPlan);
             setLog(dayEntries ?? []);
             await tick(); // let React flush before enabling sync
             syncRef.current = true;
@@ -163,6 +169,22 @@ function App() {
     FB.saveRecipes(uid, recipes).catch(() => {});
   }, [recipes]);
 
+  useEffect(() => {
+    const uid = userRef.current?.uid;
+    if (!syncRef.current || !uid) return;
+    FB.savePlan(uid, weekPlan).catch(() => {});
+  }, [weekPlan]);
+
+  // One-time cleanup: strip seeded demo data that may have leaked into localStorage.
+  useEffect(() => {
+    if (!authReady) return;
+    if (localStorage.getItem('macro.cleaned.v1')) return;
+    const SEEDED = new Set(['r1', 'r2', 'r3', 'r4']);
+    setRecipes((rs) => rs.filter((r) => !SEEDED.has(r.id)));
+    setLog((ls) => ls.filter((e) => !e.id.startsWith('l_')));
+    localStorage.setItem('macro.cleaned.v1', '1');
+  }, [authReady]);
+
   // ─── Migration handler ─────────────────────────────────────────────────
   const handleMigrate = async (doMigrate) => {
     const u = pendingUserRef.current;
@@ -177,11 +199,12 @@ function App() {
         FB.saveGoal(u.uid, migratedGoal),
         FB.saveRecipes(u.uid, recipes),
         FB.saveDayLog(u.uid, today, log),
+        FB.savePlan(u.uid, weekPlan),
       ]);
       syncRef.current = true;
     } else {
       // Start fresh — onboarding will run once migration sheet closes.
-      setLog([]); setGoal(DEFAULT_GOAL); setRecipes(D.RECIPES);
+      setLog([]); setGoal(DEFAULT_GOAL); setRecipes(D.RECIPES); setWeekPlan(EMPTY_WEEK_PLAN);
       pendingUserRef.current = u; // keep ref so handleOnboarding can seed Firebase
       await tick();
       // Seed a placeholder so the account exists in Firestore
@@ -189,6 +212,7 @@ function App() {
         FB.saveGoal(u.uid, DEFAULT_GOAL),
         FB.saveRecipes(u.uid, D.RECIPES),
         FB.saveDayLog(u.uid, today, []),
+        FB.savePlan(u.uid, EMPTY_WEEK_PLAN),
       ]);
       // Leave syncRef false — handleOnboarding enables it after goal is set
     }
@@ -216,6 +240,7 @@ function App() {
       FB.saveGoal(u.uid, goalWithFlag),
       FB.saveRecipes(u.uid, D.RECIPES),
       FB.saveDayLog(u.uid, today, []),
+      FB.savePlan(u.uid, EMPTY_WEEK_PLAN),
     ]);
     syncRef.current = true;
   };
@@ -270,6 +295,7 @@ function App() {
     openAdd: (meal) => setSheet({ kind: 'add', meal }),
     openGoal: () => setSheet({ kind: 'goal' }),
     tweaks, user,
+    weekPlan, setWeekPlan,
   };
 
   return (
@@ -777,20 +803,62 @@ function LogPage(props) {
 // Plan page — week view
 // ─────────────────────────────────────────────────────────────
 function PlanPage(props) {
-  const { goal, recipes } = props;
+  const { recipes, foods, weekPlan, setWeekPlan } = props;
   const days = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
   const today = new Date().getDay() === 0 ? 6 : new Date().getDay() - 1;
-  // demo plan
-  const plan = useMemo(() => days.map((d, i) => ({
-    day: d,
-    isToday: i === today,
-    meals: {
-      breakfast: i % 2 === 0 ? recipes[0] : null,
-      lunch:     recipes[1],
-      dinner:    i < 3 ? recipes[2] : null,
-      snack:     i % 3 === 0 ? recipes[3] : null,
-    },
-  })), [recipes, today]);
+  const [picking, setPicking] = useState(null); // { dayIndex, slot }
+
+  const setPlanSlot = (dayIndex, slot, recipeId) => {
+    setWeekPlan((plan) => plan.map((d, i) =>
+      i === dayIndex ? { ...d, [slot]: recipeId } : d
+    ));
+    setPicking(null);
+  };
+
+  const removePlanSlot = (dayIndex, slot) => {
+    setWeekPlan((plan) => plan.map((d, i) =>
+      i === dayIndex ? { ...d, [slot]: null } : d
+    ));
+  };
+
+  const autoPlan = () => {
+    if (!recipes.length) return;
+    const slots = ['breakfast', 'lunch', 'dinner', 'snack'];
+    setWeekPlan(Array.from({ length: 7 }, (_, i) => {
+      const day = {};
+      slots.forEach((slot, si) => { day[slot] = recipes[(i + si) % recipes.length].id; });
+      return day;
+    }));
+  };
+
+  const shoppingItems = useMemo(() => {
+    const foodIds = new Set();
+    weekPlan.forEach((day) => {
+      Object.values(day).forEach((recipeId) => {
+        if (!recipeId) return;
+        const recipe = recipes.find((r) => r.id === recipeId);
+        if (!recipe) return;
+        recipe.items.forEach((id) => foodIds.add(id));
+      });
+    });
+    return [...foodIds].map((id) => foods.find((f) => f.id === id)).filter(Boolean);
+  }, [weekPlan, recipes, foods]);
+
+  const dayKcal = (dayPlan) => {
+    let total = 0;
+    Object.values(dayPlan).forEach((recipeId) => {
+      if (!recipeId) return;
+      const recipe = recipes.find((r) => r.id === recipeId);
+      if (!recipe) return;
+      recipe.items.forEach((foodId) => {
+        const food = foods.find((f) => f.id === foodId);
+        if (!food) return;
+        total += window.MACRO_DATA.nutritionFor(food, food.units[0].g).kcal;
+      });
+    });
+    return Math.round(total);
+  };
+
   return (
     <div className="stack" style={{ paddingTop: 8 }}>
       <header className="page-head">
@@ -798,8 +866,8 @@ function PlanPage(props) {
           <div className="eyebrow">This week</div>
           <h1 className="page-title">Meal <em>plan</em></h1>
         </div>
-        <button className="btn ghost">
-          <Icon name="plus" size={14}/> Auto-plan
+        <button className="btn ghost" onClick={autoPlan}>
+          <Icon name="bolt" size={14}/> Auto-plan
         </button>
       </header>
       <div className="padded">
@@ -810,71 +878,153 @@ function PlanPage(props) {
           overflowX: 'auto',
           paddingBottom: 8,
         }}>
-          {plan.map((d) => (
-            <div key={d.day} className="card" style={{
-              padding: 14,
-              outline: d.isToday ? '2px solid var(--ink)' : 'none',
-              outlineOffset: -2,
-              minHeight: 360,
-            }}>
-              <div className="between" style={{ marginBottom: 10 }}>
-                <div>
-                  <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--ink-3)' }}>
-                    {d.day}
+          {weekPlan.map((dayPlan, i) => {
+            const kcal = dayKcal(dayPlan);
+            return (
+              <div key={days[i]} className="card" style={{
+                padding: 14,
+                outline: i === today ? '2px solid var(--ink)' : 'none',
+                outlineOffset: -2,
+                minHeight: 360,
+              }}>
+                <div className="between" style={{ marginBottom: 10 }}>
+                  <div>
+                    <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--ink-3)' }}>
+                      {days[i]}
+                    </div>
+                    <div className="serif" style={{ fontSize: 18 }}>
+                      {i === today ? 'Today' : ''}
+                    </div>
                   </div>
-                  <div className="serif" style={{ fontSize: 18 }}>
-                    {d.isToday ? 'Today' : ''}
-                  </div>
+                  {kcal > 0 && (
+                    <div className="numeric tabular" style={{ fontSize: 14, color: 'var(--ink-3)' }}>
+                      {kcal} kcal
+                    </div>
+                  )}
                 </div>
-                <div className="numeric tabular" style={{ fontSize: 14, color: 'var(--ink-3)' }}>
-                  {plannedKcal(d.meals)}
-                </div>
+                {['breakfast','lunch','dinner','snack'].map((slot) => (
+                  <PlanSlot
+                    key={slot}
+                    slot={slot}
+                    recipeId={dayPlan[slot]}
+                    recipes={recipes}
+                    onPick={() => setPicking({ dayIndex: i, slot })}
+                    onRemove={() => removePlanSlot(i, slot)}
+                  />
+                ))}
               </div>
-              {['breakfast','lunch','dinner','snack'].map((slot) => (
-                <PlanSlot key={slot} slot={slot} recipe={d.meals[slot]}/>
-              ))}
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
 
+      {/* Recipe picker bottom sheet */}
+      {picking && (() => {
+        const currentId = weekPlan[picking.dayIndex][picking.slot];
+        return (
+          <>
+            <div style={{
+              position: 'fixed', inset: 0, zIndex: 40,
+            }} onClick={() => setPicking(null)}/>
+            <div style={{
+              position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 50,
+              background: 'var(--surface)', borderRadius: '20px 20px 0 0',
+              boxShadow: '0 -4px 24px rgba(0,0,0,0.15)',
+              maxHeight: '60vh', display: 'flex', flexDirection: 'column',
+            }}>
+              <div style={{
+                padding: '16px 20px 12px',
+                borderBottom: '1px solid var(--line)',
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                flexShrink: 0,
+              }}>
+                <div className="serif" style={{ fontSize: 18, textTransform: 'capitalize' }}>
+                  {picking.slot}
+                </div>
+                <button className="icon-btn" onClick={() => setPicking(null)}>
+                  <Icon name="close" size={16}/>
+                </button>
+              </div>
+              <div style={{ overflowY: 'auto', padding: '8px 20px 32px' }}>
+                {currentId && (
+                  <button onClick={() => setPlanSlot(picking.dayIndex, picking.slot, null)}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 12,
+                      width: '100%', padding: '14px 0',
+                      borderBottom: '1px solid var(--line)',
+                      color: 'var(--warn)',
+                    }}>
+                    <Icon name="minus" size={16}/> Remove slot
+                  </button>
+                )}
+                {recipes.length === 0 && (
+                  <div style={{ padding: '32px 0', textAlign: 'center', color: 'var(--ink-3)' }}>
+                    No recipes yet. Add some in Recipes.
+                  </div>
+                )}
+                {recipes.map((r) => (
+                  <button key={r.id}
+                    onClick={() => setPlanSlot(picking.dayIndex, picking.slot, r.id)}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 14,
+                      width: '100%', padding: '14px 0',
+                      borderBottom: '1px solid var(--line)',
+                      textAlign: 'left',
+                    }}>
+                    <span style={{ fontSize: 28, flexShrink: 0 }}>{r.emoji}</span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 14, fontWeight: 500 }}>{r.name}</div>
+                      <div style={{ fontSize: 12, color: 'var(--ink-3)', marginTop: 1 }}>
+                        {r.items.length} ingredients · serves {r.serves}
+                      </div>
+                    </div>
+                    {currentId === r.id && <Icon name="check" size={16}/>}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </>
+        );
+      })()}
+
+      {/* Shopping list */}
       <div className="padded">
         <div className="card">
           <div className="card-hd">
             <div className="card-title">Shopping list</div>
-            <button className="chip">14 items</button>
+            <span className="chip">{shoppingItems.length} items</span>
           </div>
-          <div className="grid-3">
-            {props.foods.slice(0, 9).map((f) => (
-              <div key={f.id} className="row" style={{
-                padding: 8, borderRadius: 12, background: 'var(--surface-2)',
-              }}>
-                <div className="food-emoji">{f.emoji}</div>
-                <div style={{ minWidth: 0 }}>
-                  <div style={{ fontSize: 13, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {f.name}
+          {shoppingItems.length === 0 ? (
+            <div style={{ padding: '20px 0', textAlign: 'center', color: 'var(--ink-3)', fontSize: 13 }}>
+              Add meals to your plan to generate a shopping list.
+            </div>
+          ) : (
+            <div className="grid-3">
+              {shoppingItems.map((f) => (
+                <div key={f.id} className="row" style={{
+                  padding: 8, borderRadius: 12, background: 'var(--surface-2)',
+                }}>
+                  <div className="food-emoji">{f.emoji}</div>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: 13, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {f.name}
+                    </div>
+                    <div style={{ fontSize: 11, color: 'var(--ink-3)' }}>{f.units[0].label}</div>
                   </div>
-                  <div style={{ fontSize: 11, color: 'var(--ink-3)' }}>{f.units[0].label}</div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </div>
   );
 }
 
-function plannedKcal(meals) {
-  // approximate kcal per recipe slot
-  let s = 0;
-  Object.values(meals).forEach((r) => { if (r) s += 420; });
-  return s + ' kcal';
-}
-
-function PlanSlot({ slot, recipe }) {
+function PlanSlot({ slot, recipeId, recipes, onPick, onRemove }) {
+  const recipe = recipeId ? recipes.find((r) => r.id === recipeId) : null;
   if (!recipe) return (
-    <button style={{
+    <button onClick={onPick} style={{
       width: '100%', textAlign: 'left',
       padding: '10px 12px', marginTop: 6,
       border: '1px dashed var(--line-2)', borderRadius: 10,
@@ -892,9 +1042,19 @@ function PlanSlot({ slot, recipe }) {
       <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--ink-3)' }}>
         {slot}
       </div>
-      <div className="row" style={{ marginTop: 4 }}>
-        <span style={{ fontSize: 16 }}>{recipe.emoji}</span>
-        <div style={{ fontSize: 13, fontWeight: 500 }}>{recipe.name}</div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 4 }}>
+        <span style={{ fontSize: 16, flexShrink: 0 }}>{recipe.emoji}</span>
+        <div style={{ fontSize: 12, fontWeight: 500, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {recipe.name}
+        </div>
+        <button onClick={onPick} title="Swap"
+                style={{ padding: 3, color: 'var(--ink-3)', flexShrink: 0 }}>
+          <Icon name="arrowR" size={11}/>
+        </button>
+        <button onClick={(e) => { e.stopPropagation(); onRemove(); }} title="Remove"
+                style={{ padding: 3, color: 'var(--ink-3)', flexShrink: 0 }}>
+          <Icon name="minus" size={11}/>
+        </button>
       </div>
     </div>
   );

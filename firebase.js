@@ -60,10 +60,13 @@
              .collection('logs').doc(date)
              .set({ entries });
   }
+  function savePlan(uid, plan) {
+    return db.collection('users').doc(uid).set({ weekPlan: plan }, { merge: true });
+  }
 
   window.MACRO_FIREBASE = {
     auth, todayKey,
     signInWithGoogle, signInWithEmail, signUpWithEmail, signOutUser,
-    loadUserData, saveGoal, saveRecipes, loadDayLog, saveDayLog,
+    loadUserData, saveGoal, saveRecipes, loadDayLog, saveDayLog, savePlan,
   };
 })();

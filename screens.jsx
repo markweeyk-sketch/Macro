@@ -606,14 +606,22 @@ function GoalSheet({ open, onClose, goal, onSave }) {
   const [draft, setDraft] = useState(goal);
   useEffect(() => { if (open) setDraft(goal); }, [open, goal]);
   if (!open) return null;
-  const recompute = (mode) => {
-    const base = 2400;
-    const kcal = mode === 'lose' ? base - 200 : mode === 'gain' ? base + 400 : base;
-    const protein = Math.round(goal.currentKg * (mode === 'gain' ? 2 : 1.8));
-    const fat = Math.round((kcal * 0.3) / 9);
-    const carbs = Math.round((kcal - protein * 4 - fat * 9) / 4);
-    return { ...draft, mode, kcal, protein, carbs, fat };
+
+  const recompute = (next) => {
+    if (next.sex && next.age && next.heightCm && next.activity) {
+      const calc = window.calcGoal({
+        sex: next.sex, age: +next.age, heightCm: +next.heightCm,
+        currentKg: +next.currentKg, targetKg: +next.weightKg,
+        activity: next.activity, mode: next.mode,
+      });
+      return { ...next, kcal: calc.kcal, protein: calc.protein, carbs: calc.carbs, fat: calc.fat };
+    }
+    const kcal = Math.max(1200, next.mode === 'lose' ? 1600 : next.mode === 'gain' ? 2300 : 2000);
+    return { ...next, kcal, protein: Math.round(kcal * 0.30 / 4), carbs: Math.round(kcal * 0.40 / 4), fat: Math.round(kcal * 0.30 / 9) };
   };
+
+  const setField = (changes) => setDraft((d) => recompute({ ...d, ...changes }));
+
   return (
     <>
       <div className="sheet-bg" onClick={onClose}/>
@@ -634,7 +642,7 @@ function GoalSheet({ open, onClose, goal, onSave }) {
               { id: 'gain',     label: 'Gain',     hint: '+0.4 kg/wk' },
             ].map((m) => (
               <button key={m.id}
-                onClick={() => setDraft(recompute(m.id))}
+                onClick={() => setField({ mode: m.id })}
                 style={{
                   padding: '14px 10px',
                   borderRadius: 16,
@@ -650,9 +658,9 @@ function GoalSheet({ open, onClose, goal, onSave }) {
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 18 }}>
             <NumField label="Current weight" value={draft.currentKg} suffix="kg"
-                      onChange={(v) => setDraft({ ...draft, currentKg: v })}/>
+                      onChange={(v) => setField({ currentKg: v })}/>
             <NumField label="Target weight" value={draft.weightKg} suffix="kg"
-                      onChange={(v) => setDraft({ ...draft, weightKg: v })}/>
+                      onChange={(v) => setField({ weightKg: v })}/>
           </div>
 
           <div style={{
@@ -667,7 +675,7 @@ function GoalSheet({ open, onClose, goal, onSave }) {
                 <div className="numeric" style={{ fontSize: 36 }}>{draft.kcal}</div>
               </div>
               <div className="muted" style={{ fontSize: 12, textAlign: 'right', maxWidth: 160 }}>
-                Calculated from your weight, goal, and activity level.
+                {draft.sex ? 'Recalculated from your body stats.' : 'Estimated. Complete onboarding for a precise target.'}
               </div>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
@@ -688,7 +696,7 @@ function GoalSheet({ open, onClose, goal, onSave }) {
         </div>
         <div className="sheet-foot">
           <button className="btn ghost" onClick={onClose}>Cancel</button>
-          <button className="btn" style={{ flex: 1 }} onClick={() => { onSave(draft); onClose(); }}>
+          <button className="btn" style={{ flex: 1 }} onClick={() => { onSave({ ...draft, onboarded: true }); onClose(); }}>
             Save goal
           </button>
         </div>
@@ -737,6 +745,7 @@ function calcGoal({ sex, age, heightCm, currentKg, targetKg, activity, mode }) {
     weightKg: mode === 'maintain' ? currentKg : (targetKg || currentKg),
     startKg: currentKg, currentKg,
     streak: 0, stepsGoal: 8000, onboarded: true,
+    sex, age: +age, heightCm: +heightCm, activity,
   };
 }
 
