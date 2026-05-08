@@ -3,7 +3,6 @@
 
 const { useState, useEffect, useMemo, useRef } = React;
 
-// Yield to the event loop so React flushes state before we read refs in effects.
 const tick = () => new Promise(r => setTimeout(r, 50));
 
 // ─────────────────────────────────────────────────────────────
@@ -41,7 +40,6 @@ const THEMES = {
 const THEME_KEYS = ['bone','graphite','citrus','marine'];
 const THEME_PALETTES = THEME_KEYS.map((k) => THEMES[k].swatch);
 
-// Blank goal for new users — onboarded:false triggers the onboarding sheet.
 const DEFAULT_GOAL = {
   mode: 'maintain', kcal: 2000, protein: 150, carbs: 200, fat: 67,
   weightKg: 70, startKg: 70, currentKg: 70, streak: 0, stepsGoal: 8000,
@@ -52,14 +50,28 @@ const EMPTY_WEEK_PLAN = Array.from({ length: 7 }, () => ({
   breakfast: null, lunch: null, dinner: null, snack: null,
 }));
 
+const SEEDED_RECIPE_IDS = new Set(['r1','r2','r3','r4']);
+
+// Normalize recipe.items to [{ food, grams, unitIndex }], handling both old string[] and new object[] formats.
+function getRecipeItems(recipe, foods) {
+  return (recipe.items || []).map((item) => {
+    const foodId = typeof item === 'string' ? item : item.foodId;
+    const food   = foods.find((f) => f.id === foodId);
+    if (!food) return null;
+    const grams  = typeof item === 'string' ? food.units[0].g : item.grams;
+    const unitIndex = typeof item === 'string' ? 0 : (item.unitIndex || 0);
+    return { food, grams, unitIndex };
+  }).filter(Boolean);
+}
+
 // ─────────────────────────────────────────────────────────────
 // Shell
 // ─────────────────────────────────────────────────────────────
 function App() {
   const D = window.MACRO_DATA;
   const FB = window.MACRO_FIREBASE;
-  const F = window.__FRAME || {};                   // URL-param overrides for canvas frames
-  const persist = F.persist !== false;              // canvas frames disable persistence
+  const F = window.__FRAME || {};
+  const persist = F.persist !== false;
   const useStateOrPersist = (k, init) => persist
     ? usePersistent(k, init)
     : useState(init);
@@ -71,17 +83,20 @@ function App() {
   const [showMigrate, setShowMigrate] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
-  const pendingUserRef = useRef(null); // user awaiting migration decision
-  const syncRef  = useRef(false);      // true → safe to write to Firestore
-  const userRef  = useRef(null);       // mirrors user for use inside effects
+  const [showEditProfile, setShowEditProfile] = useState(false);
+  const [showLogWeight, setShowLogWeight] = useState(false);
+  const pendingUserRef = useRef(null);
+  const syncRef  = useRef(false);
+  const userRef  = useRef(null);
 
   // ─── App state ─────────────────────────────────────────────────────────
   const [route, setRoute] = useState(F.route || 'today');
   const [log, setLog] = useStateOrPersist('macro.log.v2', []);
   const [goal, setGoal] = useStateOrPersist('macro.goal.v2', DEFAULT_GOAL);
   const [foods] = useState(D.FOODS);
-  const [recipes, setRecipes] = useStateOrPersist('macro.recipes', D.RECIPES);
+  const [recipes, setRecipes] = useStateOrPersist('macro.recipes', []);
   const [weekPlan, setWeekPlan] = useStateOrPersist('macro.plan.v1', EMPTY_WEEK_PLAN);
+  const [weights, setWeights] = useStateOrPersist('macro.weights', []);
   const [sheet, setSheet] = useState(
     F.sheet === 'add'  ? { kind: 'add', meal: F.meal || 'lunch' } :
     F.sheet === 'goal' ? { kind: 'goal' } : null
@@ -90,7 +105,6 @@ function App() {
   const [tweaks, setTweak] = window.useTweaks(tweakDefaults);
   const themeScopeRef = useRef(null);
 
-  // Apply theme: scope to local container when embedded (frame mode), otherwise <html>.
   useEffect(() => {
     const attr = THEMES[tweaks.theme]?.attr;
     const target = F.scopeTheme && themeScopeRef.current
@@ -114,15 +128,14 @@ function App() {
             FB.loadDayLog(u.uid, today),
           ]);
           if (userData) {
-            // Cloud data exists — it wins.
             if (userData.goal)     setGoal(userData.goal);
-            if (userData.recipes)  setRecipes(userData.recipes);
+            if (userData.recipes)  setRecipes(userData.recipes.filter((r) => !SEEDED_RECIPE_IDS.has(r.id)));
             if (userData.weekPlan) setWeekPlan(userData.weekPlan);
+            if (userData.weights)  setWeights(userData.weights);
             setLog(dayEntries ?? []);
-            await tick(); // let React flush before enabling sync
+            await tick();
             syncRef.current = true;
           } else {
-            // New account — offer to migrate existing local data.
             const hasLocal =
               !!localStorage.getItem('macro.log.v2') ||
               !!localStorage.getItem('macro.goal.v2');
@@ -131,9 +144,8 @@ function App() {
               setUser(u);
               setShowMigrate(true);
               setAuthReady(true);
-              return; // sync stays off until migration resolves
+              return;
             }
-            // Truly new — show onboarding before seeding cloud.
             pendingUserRef.current = u;
           }
         } catch (e) {
@@ -150,7 +162,7 @@ function App() {
     });
   }, []);
 
-  // ─── Firestore sync (fires only once sync is enabled) ─────────────────
+  // ─── Firestore sync ────────────────────────────────────────────────────
   useEffect(() => {
     const uid = userRef.current?.uid;
     if (!syncRef.current || !uid) return;
@@ -175,14 +187,19 @@ function App() {
     FB.savePlan(uid, weekPlan).catch(() => {});
   }, [weekPlan]);
 
-  // One-time cleanup: strip seeded demo data that may have leaked into localStorage.
+  useEffect(() => {
+    const uid = userRef.current?.uid;
+    if (!syncRef.current || !uid) return;
+    FB.saveWeights(uid, weights).catch(() => {});
+  }, [weights]);
+
+  // One-time cleanup: strip seeded demo data from localStorage.
   useEffect(() => {
     if (!authReady) return;
-    if (localStorage.getItem('macro.cleaned.v1')) return;
-    const SEEDED = new Set(['r1', 'r2', 'r3', 'r4']);
-    setRecipes((rs) => rs.filter((r) => !SEEDED.has(r.id)));
+    if (localStorage.getItem('macro.cleaned.v2')) return;
+    setRecipes((rs) => rs.filter((r) => !SEEDED_RECIPE_IDS.has(r.id)));
     setLog((ls) => ls.filter((e) => !e.id.startsWith('l_')));
-    localStorage.setItem('macro.cleaned.v1', '1');
+    localStorage.setItem('macro.cleaned.v2', '1');
   }, [authReady]);
 
   // ─── Migration handler ─────────────────────────────────────────────────
@@ -191,30 +208,30 @@ function App() {
     pendingUserRef.current = null;
     const today = FB.todayKey();
     if (doMigrate) {
-      // Upload current local state, mark as onboarded.
       const migratedGoal = { ...goal, onboarded: true };
+      const cleanRecipes = recipes.filter((r) => !SEEDED_RECIPE_IDS.has(r.id));
       setGoal(migratedGoal);
+      setRecipes(cleanRecipes);
       await tick();
       await Promise.all([
         FB.saveGoal(u.uid, migratedGoal),
-        FB.saveRecipes(u.uid, recipes),
+        FB.saveRecipes(u.uid, cleanRecipes),
         FB.saveDayLog(u.uid, today, log),
         FB.savePlan(u.uid, weekPlan),
+        FB.saveWeights(u.uid, weights),
       ]);
       syncRef.current = true;
     } else {
-      // Start fresh — onboarding will run once migration sheet closes.
-      setLog([]); setGoal(DEFAULT_GOAL); setRecipes(D.RECIPES); setWeekPlan(EMPTY_WEEK_PLAN);
-      pendingUserRef.current = u; // keep ref so handleOnboarding can seed Firebase
+      setLog([]); setGoal(DEFAULT_GOAL); setRecipes([]); setWeekPlan(EMPTY_WEEK_PLAN); setWeights([]);
+      pendingUserRef.current = u;
       await tick();
-      // Seed a placeholder so the account exists in Firestore
       await Promise.all([
         FB.saveGoal(u.uid, DEFAULT_GOAL),
-        FB.saveRecipes(u.uid, D.RECIPES),
+        FB.saveRecipes(u.uid, []),
         FB.saveDayLog(u.uid, today, []),
         FB.savePlan(u.uid, EMPTY_WEEK_PLAN),
+        FB.saveWeights(u.uid, []),
       ]);
-      // Leave syncRef false — handleOnboarding enables it after goal is set
     }
     setShowMigrate(false);
   };
@@ -232,17 +249,61 @@ function App() {
     setGoal(goalWithFlag);
     setLog([]);
     const u = pendingUserRef.current;
-    if (!u) return; // guest — usePersistent handles persistence
+    if (!u) return;
     pendingUserRef.current = null;
     const today = FB?.todayKey();
     await tick();
     await Promise.all([
       FB.saveGoal(u.uid, goalWithFlag),
-      FB.saveRecipes(u.uid, D.RECIPES),
+      FB.saveRecipes(u.uid, []),
       FB.saveDayLog(u.uid, today, []),
       FB.savePlan(u.uid, EMPTY_WEEK_PLAN),
+      FB.saveWeights(u.uid, []),
     ]);
     syncRef.current = true;
+  };
+
+  // ─── New handlers ──────────────────────────────────────────────────────
+  const handleLogWeight = (weight, recalculate) => {
+    const today = FB?.todayKey() || new Date().toISOString().slice(0, 10);
+    setWeights((ws) => {
+      const filtered = ws.filter((e) => e.date !== today);
+      return [...filtered, { date: today, weight }].sort((a, b) => a.date.localeCompare(b.date));
+    });
+    setGoal((g) => {
+      const updated = { ...g, currentKg: weight };
+      if (recalculate && g.sex && g.age && g.heightCm && g.activity) {
+        const calc = window.calcGoal({
+          sex: g.sex, age: +g.age, heightCm: +g.heightCm,
+          currentKg: weight, targetKg: +(g.weightKg || weight),
+          activity: g.activity, mode: g.mode,
+        });
+        return { ...updated, kcal: calc.kcal, protein: calc.protein, carbs: calc.carbs, fat: calc.fat };
+      }
+      return updated;
+    });
+  };
+
+  const handleEditProfile = (updatedGoal) => {
+    setGoal(updatedGoal);
+    setShowEditProfile(false);
+  };
+
+  const handleReset = async () => {
+    syncRef.current = false;
+    const u = userRef.current;
+    setLog([]); setGoal(DEFAULT_GOAL); setRecipes([]); setWeekPlan(EMPTY_WEEK_PLAN); setWeights([]);
+    if (u) {
+      pendingUserRef.current = u;
+      const today = FB?.todayKey();
+      await Promise.all([
+        FB.saveGoal(u.uid, DEFAULT_GOAL),
+        FB.saveRecipes(u.uid, []),
+        FB.saveDayLog(u.uid, today, []),
+        FB.savePlan(u.uid, EMPTY_WEEK_PLAN),
+        FB.saveWeights(u.uid, []),
+      ]).catch(() => {});
+    }
   };
 
   const totals = useMemo(() => {
@@ -255,9 +316,7 @@ function App() {
     });
     return { kcal, p, c, f };
   }, [log, foods]);
-  
-  // Onboarding fires for any user (guest or signed-in) whose goal.onboarded is
-  // strictly false — meaning they used DEFAULT_GOAL, not old data lacking the field.
+
   const needsOnboarding = goal.onboarded === false && !showMigrate;
 
   // ─── Loading screen ────────────────────────────────────────────────────
@@ -271,8 +330,6 @@ function App() {
       </div>
     );
   }
-
- 
 
   const addFood = (food, grams, unitIndex, meal) => {
     setLog((cur) => [
@@ -289,13 +346,14 @@ function App() {
   const frequent = D.FREQUENT_IDS.map((id) => foods.find((f) => f.id === id)).filter(Boolean);
 
   const props = {
-    foods, log, goal, totals, recipes, frequent,
-    setLog, setGoal, setRecipes,
+    foods, log, goal, totals, recipes, frequent, weights,
+    setLog, setGoal, setRecipes, setWeights,
     addFood, removeLog,
     openAdd: (meal) => setSheet({ kind: 'add', meal }),
     openGoal: () => setSheet({ kind: 'goal' }),
     tweaks, user,
     weekPlan, setWeekPlan,
+    onLogWeight: () => setShowLogWeight(true),
   };
 
   return (
@@ -340,12 +398,24 @@ function App() {
         onSignOut={() => { setShowSettings(false); handleSignOut(); }}
         onOpenProfile={() => { setShowSettings(false); setShowProfile(true); }}
         onOpenGoal={() => { setShowSettings(false); setSheet({ kind: 'goal' }); }}
+        onEditProfile={() => { setShowSettings(false); setShowEditProfile(true); }}
       />
       <ProfileSheet
         open={showProfile} onClose={() => setShowProfile(false)}
         user={user} goal={goal}
         onOpenGoal={() => { setShowProfile(false); setSheet({ kind: 'goal' }); }}
         onSignOut={() => { setShowProfile(false); handleSignOut(); }}
+        onEditProfile={() => { setShowProfile(false); setShowEditProfile(true); }}
+        onLogWeight={() => { setShowProfile(false); setShowLogWeight(true); }}
+        onReset={() => { setShowProfile(false); handleReset(); }}
+      />
+      <EditProfileSheet
+        open={showEditProfile} onClose={() => setShowEditProfile(false)}
+        goal={goal} onSave={handleEditProfile}
+      />
+      <LogWeightSheet
+        open={showLogWeight} onClose={() => setShowLogWeight(false)}
+        goal={goal} onConfirm={(w, recalc) => { handleLogWeight(w, recalc); setShowLogWeight(false); }}
       />
       <OnboardingSheet
         open={needsOnboarding}
@@ -602,7 +672,6 @@ function TodayPage(props) {
         </div>
       </header>
 
-      {/* Hero card: ring + macros */}
       <section className="card padded-md" style={{ padding: 24 }}>
         {tweaks.dashboardLayout === 'rings' && (
           <div style={{
@@ -691,7 +760,6 @@ function TodayPage(props) {
         )}
       </section>
 
-      {/* Quick log strip */}
       <section className="padded">
         <div className="between" style={{ marginBottom: 10 }}>
           <div className="eyebrow">Quick log · recents</div>
@@ -702,7 +770,6 @@ function TodayPage(props) {
         <QuickLog foods={frequent} onAdd={(f) => addFood(f, f.units[0].g, 0, mealNow())}/>
       </section>
 
-      {/* Today's meals */}
       <section className="padded">
         <div className="eyebrow" style={{ marginBottom: 12 }}>Today's meals</div>
         {['breakfast','lunch','dinner','snack'].map((m) => (
@@ -719,7 +786,6 @@ function TodayPage(props) {
         ))}
       </section>
 
-      {/* Secondary metrics */}
       <section className="grid-2 padded">
         {props.tweaks.showSteps && (
           <div className="card">
@@ -806,7 +872,7 @@ function PlanPage(props) {
   const { recipes, foods, weekPlan, setWeekPlan } = props;
   const days = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
   const today = new Date().getDay() === 0 ? 6 : new Date().getDay() - 1;
-  const [picking, setPicking] = useState(null); // { dayIndex, slot }
+  const [picking, setPicking] = useState(null);
 
   const setPlanSlot = (dayIndex, slot, recipeId) => {
     setWeekPlan((plan) => plan.map((d, i) =>
@@ -838,7 +904,7 @@ function PlanPage(props) {
         if (!recipeId) return;
         const recipe = recipes.find((r) => r.id === recipeId);
         if (!recipe) return;
-        recipe.items.forEach((id) => foodIds.add(id));
+        getRecipeItems(recipe, foods).forEach(({ food }) => foodIds.add(food.id));
       });
     });
     return [...foodIds].map((id) => foods.find((f) => f.id === id)).filter(Boolean);
@@ -850,10 +916,8 @@ function PlanPage(props) {
       if (!recipeId) return;
       const recipe = recipes.find((r) => r.id === recipeId);
       if (!recipe) return;
-      recipe.items.forEach((foodId) => {
-        const food = foods.find((f) => f.id === foodId);
-        if (!food) return;
-        total += window.MACRO_DATA.nutritionFor(food, food.units[0].g).kcal;
+      getRecipeItems(recipe, foods).forEach(({ food, grams }) => {
+        total += window.MACRO_DATA.nutritionFor(food, grams).kcal;
       });
     });
     return Math.round(total);
@@ -918,14 +982,11 @@ function PlanPage(props) {
         </div>
       </div>
 
-      {/* Recipe picker bottom sheet */}
       {picking && (() => {
         const currentId = weekPlan[picking.dayIndex][picking.slot];
         return (
           <>
-            <div style={{
-              position: 'fixed', inset: 0, zIndex: 40,
-            }} onClick={() => setPicking(null)}/>
+            <div style={{ position: 'fixed', inset: 0, zIndex: 40 }} onClick={() => setPicking(null)}/>
             <div style={{
               position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 50,
               background: 'var(--surface)', borderRadius: '20px 20px 0 0',
@@ -975,7 +1036,7 @@ function PlanPage(props) {
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontSize: 14, fontWeight: 500 }}>{r.name}</div>
                       <div style={{ fontSize: 12, color: 'var(--ink-3)', marginTop: 1 }}>
-                        {r.items.length} ingredients · serves {r.serves}
+                        {(r.items || []).length} ingredients · serves {r.serves}
                       </div>
                     </div>
                     {currentId === r.id && <Icon name="check" size={16}/>}
@@ -987,7 +1048,6 @@ function PlanPage(props) {
         );
       })()}
 
-      {/* Shopping list */}
       <div className="padded">
         <div className="card">
           <div className="card-hd">
@@ -1061,10 +1121,36 @@ function PlanSlot({ slot, recipeId, recipes, onPick, onRemove }) {
 }
 
 // ─────────────────────────────────────────────────────────────
-// Recipes page
+// Recipes page — full CRUD
 // ─────────────────────────────────────────────────────────────
 function RecipesPage(props) {
-  const { recipes, foods } = props;
+  const { recipes, setRecipes, foods } = props;
+  const [editorState, setEditorState] = useState(null); // null | { recipe: null } | { recipe: {...} }
+  const [viewRecipe, setViewRecipe] = useState(null);
+  const [deleteStep, setDeleteStep] = useState(0);
+
+  const openCreate = () => { setEditorState({ recipe: null }); };
+  const openEdit   = (r) => { setViewRecipe(null); setEditorState({ recipe: r }); };
+  const closeEditor = () => setEditorState(null);
+
+  const saveRecipe = (r) => {
+    setRecipes((rs) => {
+      const idx = rs.findIndex((x) => x.id === r.id);
+      return idx >= 0 ? rs.map((x) => x.id === r.id ? r : x) : [...rs, r];
+    });
+    setEditorState(null);
+    setViewRecipe(r);
+  };
+
+  const deleteRecipe = (r) => {
+    setRecipes((rs) => rs.filter((x) => x.id !== r.id));
+    setViewRecipe(null);
+    setDeleteStep(0);
+  };
+
+  const openView = (r) => { setViewRecipe(r); setDeleteStep(0); };
+  const closeView = () => { setViewRecipe(null); setDeleteStep(0); };
+
   return (
     <div className="stack" style={{ paddingTop: 8 }}>
       <header className="page-head">
@@ -1072,19 +1158,20 @@ function RecipesPage(props) {
           <div className="eyebrow">Saved meals</div>
           <h1 className="page-title">Recipes &<br/><em>quick meals</em></h1>
         </div>
-        <button className="btn">
+        <button className="btn" onClick={openCreate}>
           <Icon name="plus" size={14}/> New recipe
         </button>
       </header>
       <div className="padded grid-2">
         {recipes.map((r) => {
-          const items = r.items.map((id) => foods.find((f) => f.id === id)).filter(Boolean);
-          const totals = items.reduce((s, f) => {
-            const n = window.MACRO_DATA.nutritionFor(f, f.units[0].g);
+          const items = getRecipeItems(r, foods);
+          const tot = items.reduce((s, { food, grams }) => {
+            const n = window.MACRO_DATA.nutritionFor(food, grams);
             return { kcal: s.kcal + n.kcal, p: s.p + n.p, c: s.c + n.c, f: s.f + n.f };
           }, { kcal: 0, p: 0, c: 0, f: 0 });
           return (
-            <div key={r.id} className="card" style={{ padding: 0, overflow: 'hidden' }}>
+            <button key={r.id} className="card" style={{ padding: 0, overflow: 'hidden', textAlign: 'left', cursor: 'pointer' }}
+                    onClick={() => openView(r)}>
               <div style={{
                 height: 120,
                 background: `linear-gradient(135deg, var(--surface-2), var(--bg))`,
@@ -1095,14 +1182,12 @@ function RecipesPage(props) {
                 <div style={{ fontSize: 12, color: 'var(--ink-3)', marginBottom: 14 }}>
                   {items.length} ingredients · serves {r.serves}
                 </div>
-                <div style={{
-                  display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6,
-                }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6 }}>
                   {[
-                    { l: 'kcal', v: Math.round(totals.kcal), c: 'var(--ink)' },
-                    { l: 'P',    v: Math.round(totals.p) + 'g', c: 'var(--p-color)' },
-                    { l: 'C',    v: Math.round(totals.c) + 'g', c: 'var(--c-color)' },
-                    { l: 'F',    v: Math.round(totals.f) + 'g', c: 'var(--f-color)' },
+                    { l: 'kcal', v: Math.round(tot.kcal), c: 'var(--ink)' },
+                    { l: 'P',    v: Math.round(tot.p) + 'g', c: 'var(--p-color)' },
+                    { l: 'C',    v: Math.round(tot.c) + 'g', c: 'var(--c-color)' },
+                    { l: 'F',    v: Math.round(tot.f) + 'g', c: 'var(--f-color)' },
                   ].map((m) => (
                     <div key={m.l} style={{
                       background: 'var(--surface-2)', borderRadius: 10, padding: '8px 6px', textAlign: 'center',
@@ -1115,9 +1200,9 @@ function RecipesPage(props) {
                   ))}
                 </div>
                 <div style={{ marginTop: 14, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                  {items.slice(0, 4).map((f) => (
-                    <span key={f.id} className="chip" style={{ background: 'var(--surface-2)', fontSize: 11 }}>
-                      {f.emoji} {f.name}
+                  {items.slice(0, 4).map(({ food }) => (
+                    <span key={food.id} className="chip" style={{ background: 'var(--surface-2)', fontSize: 11 }}>
+                      {food.emoji} {food.name}
                     </span>
                   ))}
                   {items.length > 4 && (
@@ -1127,11 +1212,10 @@ function RecipesPage(props) {
                   )}
                 </div>
               </div>
-            </div>
+            </button>
           );
         })}
 
-        {/* New recipe placeholder */}
         <button className="card" style={{
           minHeight: 280,
           border: '2px dashed var(--line-2)',
@@ -1139,7 +1223,7 @@ function RecipesPage(props) {
           display: 'grid', placeItems: 'center',
           color: 'var(--ink-3)',
           cursor: 'pointer',
-        }}>
+        }} onClick={openCreate}>
           <div style={{ textAlign: 'center' }}>
             <div style={{
               width: 48, height: 48, borderRadius: 50, background: 'var(--surface-2)',
@@ -1152,6 +1236,112 @@ function RecipesPage(props) {
           </div>
         </button>
       </div>
+
+      {/* Recipe detail sheet */}
+      {viewRecipe && (() => {
+        const r = recipes.find((x) => x.id === viewRecipe.id) || viewRecipe;
+        const items = getRecipeItems(r, foods);
+        const tot = items.reduce((s, { food, grams }) => {
+          const n = window.MACRO_DATA.nutritionFor(food, grams);
+          return { kcal: s.kcal + n.kcal, p: s.p + n.p, c: s.c + n.c, f: s.f + n.f };
+        }, { kcal: 0, p: 0, c: 0, f: 0 });
+        return (
+          <>
+            <div style={{ position: 'fixed', inset: 0, zIndex: 40, background: 'rgba(0,0,0,0.3)' }} onClick={closeView}/>
+            <div style={{
+              position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 50,
+              background: 'var(--surface)', borderRadius: '20px 20px 0 0',
+              maxHeight: '85vh', display: 'flex', flexDirection: 'column',
+              boxShadow: '0 -4px 32px rgba(0,0,0,0.15)',
+            }}>
+              <div style={{
+                padding: '16px 20px 12px', borderBottom: '1px solid var(--line)',
+                display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0,
+              }}>
+                <span style={{ fontSize: 32 }}>{r.emoji}</span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div className="serif" style={{ fontSize: 20 }}>{r.name}</div>
+                  <div style={{ fontSize: 12, color: 'var(--ink-3)' }}>{items.length} ingredients · serves {r.serves}</div>
+                </div>
+                <button className="icon-btn" onClick={closeView}><Icon name="close" size={16}/></button>
+              </div>
+              <div style={{ overflowY: 'auto', padding: '16px 20px 8px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, marginBottom: 20 }}>
+                  {[
+                    { l: 'kcal', v: Math.round(tot.kcal), c: 'var(--ink)' },
+                    { l: 'P',    v: Math.round(tot.p) + 'g', c: 'var(--p-color)' },
+                    { l: 'C',    v: Math.round(tot.c) + 'g', c: 'var(--c-color)' },
+                    { l: 'F',    v: Math.round(tot.f) + 'g', c: 'var(--f-color)' },
+                  ].map((m) => (
+                    <div key={m.l} style={{
+                      background: 'var(--surface-2)', borderRadius: 12, padding: '10px 8px', textAlign: 'center',
+                    }}>
+                      <div className="numeric" style={{ fontSize: 22, color: m.c }}>{m.v}</div>
+                      <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--ink-3)' }}>{m.l}</div>
+                    </div>
+                  ))}
+                </div>
+                <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--ink-3)', marginBottom: 10 }}>
+                  Ingredients
+                </div>
+                {items.map(({ food, grams, unitIndex }) => {
+                  const n = window.MACRO_DATA.nutritionFor(food, grams);
+                  const unit = food.units[unitIndex] || food.units[0];
+                  return (
+                    <div key={food.id} style={{
+                      display: 'flex', alignItems: 'center', gap: 12,
+                      padding: '10px 0', borderBottom: '1px solid var(--line)',
+                    }}>
+                      <div className="food-emoji" style={{ width: 36, height: 36, fontSize: 18, flexShrink: 0 }}>{food.emoji}</div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 14, fontWeight: 500 }}>{food.name}</div>
+                        <div style={{ fontSize: 12, color: 'var(--ink-3)' }}>{unit.label}</div>
+                      </div>
+                      <div style={{ fontSize: 13, color: 'var(--ink-2)', textAlign: 'right' }} className="tabular">
+                        {Math.round(n.kcal)} kcal
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              <div style={{ padding: '12px 20px 32px', borderTop: '1px solid var(--line)', flexShrink: 0 }}>
+                {deleteStep === 0 ? (
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button className="btn ghost" style={{ flex: 1 }} onClick={() => openEdit(r)}>
+                      <Icon name="scale" size={14}/> Edit
+                    </button>
+                    <button className="btn ghost" style={{ flex: 1, color: 'var(--warn)' }}
+                            onClick={() => setDeleteStep(1)}>
+                      <Icon name="minus" size={14}/> Delete
+                    </button>
+                  </div>
+                ) : (
+                  <div style={{ background: 'rgba(198,106,58,0.08)', borderRadius: 12, padding: 14 }}>
+                    <div style={{ fontSize: 13, color: 'var(--ink-2)', marginBottom: 12 }}>
+                      Delete <strong>{r.name}</strong>? This cannot be undone.
+                    </div>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button className="btn ghost" style={{ flex: 1, fontSize: 13 }} onClick={() => setDeleteStep(0)}>Cancel</button>
+                      <button className="btn" onClick={() => deleteRecipe(r)}
+                              style={{ flex: 1, fontSize: 13, background: 'var(--warn)', boxShadow: 'none' }}>
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </>
+        );
+      })()}
+
+      <RecipeEditorSheet
+        open={!!editorState}
+        onClose={closeEditor}
+        recipe={editorState?.recipe}
+        foods={foods}
+        onSave={saveRecipe}
+      />
     </div>
   );
 }
@@ -1160,10 +1350,28 @@ function RecipesPage(props) {
 // Progress page
 // ─────────────────────────────────────────────────────────────
 function ProgressPage(props) {
-  const { goal } = props;
+  const { goal, weights, onLogWeight } = props;
   const D = window.MACRO_DATA;
-  const delta = +(goal.startKg - goal.currentKg).toFixed(1);
-  const toGo = +(goal.currentKg - goal.weightKg).toFixed(1);
+  const [range, setRange] = useState('30d');
+
+  const weightData = useMemo(() => {
+    if (!weights || weights.length === 0) return null;
+    const now = new Date();
+    const cutoff = range === '7d'
+      ? new Date(now - 7 * 864e5).toISOString().slice(0, 10)
+      : range === '30d'
+      ? new Date(now - 30 * 864e5).toISOString().slice(0, 10)
+      : '0000-00-00';
+    return weights.filter((e) => e.date >= cutoff).map((e) => e.weight);
+  }, [weights, range]);
+
+  const displayData = weightData && weightData.length >= 2 ? weightData : D.WEIGHT_HISTORY;
+  const currentKg = weightData && weightData.length > 0
+    ? weightData[weightData.length - 1]
+    : goal.currentKg;
+  const delta = +(goal.startKg - currentKg).toFixed(1);
+  const toGo = +(currentKg - goal.weightKg).toFixed(1);
+
   return (
     <div className="stack" style={{ paddingTop: 8 }}>
       <header className="page-head">
@@ -1171,7 +1379,9 @@ function ProgressPage(props) {
           <div className="eyebrow">Last 14 days</div>
           <h1 className="page-title">Your <em>progress</em></h1>
         </div>
-        <div className="chip dot">On track</div>
+        <button className="btn" onClick={onLogWeight}>
+          <Icon name="scale" size={14}/> Log weight
+        </button>
       </header>
 
       <section className="padded grid-2">
@@ -1180,19 +1390,42 @@ function ProgressPage(props) {
             <div>
               <div className="eyebrow">Weight</div>
               <div className="row" style={{ alignItems: 'baseline', gap: 10 }}>
-                <span className="numeric" style={{ fontSize: 44 }}>{goal.currentKg}</span>
+                <span className="numeric" style={{ fontSize: 44 }}>{currentKg}</span>
                 <span style={{ fontSize: 14, color: 'var(--ink-3)' }}>kg</span>
-                <span className="chip" style={{ background: 'transparent', color: 'var(--accent)', padding: 0 }}>
-                  ↓ {delta} kg
-                </span>
+                {delta !== 0 && (
+                  <span className="chip" style={{ background: 'transparent', color: 'var(--accent)', padding: 0 }}>
+                    {delta > 0 ? '↓' : '↑'} {Math.abs(delta)} kg
+                  </span>
+                )}
               </div>
             </div>
-            <div style={{ textAlign: 'right' }}>
-              <div className="eyebrow">To goal</div>
-              <div className="numeric" style={{ fontSize: 22 }}>{toGo} kg</div>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8 }}>
+              <div style={{ textAlign: 'right' }}>
+                <div className="eyebrow">To goal</div>
+                <div className="numeric" style={{ fontSize: 22 }}>{toGo} kg</div>
+              </div>
+              <div style={{ display: 'flex', gap: 4 }}>
+                {['7d','30d','all'].map((r) => (
+                  <button key={r}
+                    onClick={() => setRange(r)}
+                    className={'chip' + (range === r ? '' : ' ghost')}
+                    style={{
+                      fontSize: 11, cursor: 'pointer',
+                      background: range === r ? 'var(--ink)' : 'var(--surface-2)',
+                      color: range === r ? 'var(--bg)' : 'var(--ink-2)',
+                    }}>
+                    {r}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
-          <WeightChart data={D.WEIGHT_HISTORY} goalKg={goal.weightKg} startKg={goal.startKg}/>
+          <WeightChart data={displayData} goalKg={goal.weightKg} startKg={goal.startKg}/>
+          {(!weights || weights.length === 0) && (
+            <div style={{ fontSize: 12, color: 'var(--ink-3)', marginTop: 8, textAlign: 'center' }}>
+              Log your weight to see your real trend here.
+            </div>
+          )}
         </div>
 
         <div className="card">
@@ -1243,7 +1476,7 @@ function ProgressPage(props) {
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {[
-              { i: 'bolt',  t: 'Protein up 18% this week', s: 'You\u2019re hitting target on 5 of 7 days — best yet.' },
+              { i: 'bolt',  t: 'Protein up 18% this week', s: 'You’re hitting target on 5 of 7 days — best yet.' },
               { i: 'flame', t: '12-day streak is your second-longest', s: '16 more matches your record from March.' },
               { i: 'foot',  t: 'Step average climbing', s: 'Up 1,200 from last week. Calorie burn matches +0.2kg/wk loss.' },
             ].map((x, i) => (
@@ -1307,7 +1540,6 @@ function TweaksPanelUI({ tweaks, setTweak }) {
   );
 }
 
-// Mount only when not embedded in a multi-root canvas.
 if (!window.__SKIP_AUTOMOUNT) {
   ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
 }

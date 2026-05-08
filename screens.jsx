@@ -979,7 +979,7 @@ function SettingsToggle({ value, onChange }) {
 // ─────────────────────────────────────────────────────────────
 // Settings sheet
 // ─────────────────────────────────────────────────────────────
-function SettingsSheet({ open, onClose, tweaks, setTweak, user, goal, onSignIn, onSignOut, onOpenProfile, onOpenGoal }) {
+function SettingsSheet({ open, onClose, tweaks, setTweak, user, goal, onSignIn, onSignOut, onOpenProfile, onOpenGoal, onEditProfile }) {
   if (!open) return null;
 
   const isDark = tweaks.theme === 'graphite';
@@ -1064,6 +1064,11 @@ function SettingsSheet({ open, onClose, tweaks, setTweak, user, goal, onSignIn, 
                 <SettingsRowBtn
                   label={user.displayName || 'Profile'} sub={user.email}
                   icon="user" onClick={onOpenProfile}/>
+                {goal && onEditProfile && (
+                  <SettingsRowBtn
+                    label="Edit profile" sub="Update stats & recalculate goal"
+                    icon="scale" onClick={onEditProfile}/>
+                )}
                 {goal && (
                   <SettingsRowBtn
                     label="Daily goal" sub={`${goal.kcal} kcal · ${goal.mode}`}
@@ -1087,8 +1092,10 @@ function SettingsSheet({ open, onClose, tweaks, setTweak, user, goal, onSignIn, 
 // ─────────────────────────────────────────────────────────────
 // Profile sheet
 // ─────────────────────────────────────────────────────────────
-function ProfileSheet({ open, onClose, user, goal, onOpenGoal, onSignOut }) {
+function ProfileSheet({ open, onClose, user, goal, onOpenGoal, onSignOut, onEditProfile, onReset, onLogWeight }) {
   const [pwMsg, setPwMsg] = useState('');
+  const [resetStep, setResetStep] = useState(0); // 0=normal, 1=confirm
+  useEffect(() => { if (!open) { setResetStep(0); setPwMsg(''); } }, [open]);
   if (!open || !user) return null;
 
   const FB = window.MACRO_FIREBASE;
@@ -1175,19 +1182,50 @@ function ProfileSheet({ open, onClose, user, goal, onOpenGoal, onSignOut }) {
               <SettingsRowBtn
                 label={pwMsg || 'Reset password'}
                 sub={pwMsg ? '' : 'Send a reset link to your inbox'}
-                icon="arrowR"
-                onClick={sendReset}
-              />
+                icon="arrowR" onClick={sendReset}/>
             )}
           </SettingsGroup>
 
           {goal && (
             <SettingsGroup label="Nutrition">
+              {onEditProfile && (
+                <SettingsRowBtn label="Edit profile" sub="Update stats & recalculate goal"
+                  icon="scale" onClick={onEditProfile}/>
+              )}
+              {onLogWeight && (
+                <SettingsRowBtn label="Log weight" sub={`Current: ${goal.currentKg} kg`}
+                  icon="drop" onClick={onLogWeight}/>
+              )}
               <SettingsRowBtn
                 label="Daily goal" sub={`${goal.kcal} kcal · ${goal.mode}`}
                 icon="target" onClick={onOpenGoal}/>
             </SettingsGroup>
           )}
+
+          <SettingsGroup label="Data">
+            {resetStep === 0 ? (
+              <SettingsRowBtn label="Reset account data"
+                sub="Delete all logs, plans, recipes, and goal"
+                icon="close" onClick={() => setResetStep(1)} danger/>
+            ) : (
+              <div style={{ padding: '16px', background: 'rgba(198,106,58,0.08)', borderRadius: 12 }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--warn)', marginBottom: 6 }}>
+                  Are you sure?
+                </div>
+                <div style={{ fontSize: 12, color: 'var(--ink-2)', lineHeight: 1.55, marginBottom: 14 }}>
+                  This will permanently delete all your food logs, meal plans, recipes, and goal data. This cannot be undone.
+                </div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button className="btn ghost" style={{ flex: 1, fontSize: 13 }}
+                          onClick={() => setResetStep(0)}>Cancel</button>
+                  <button className="btn" onClick={onReset}
+                          style={{ flex: 1, fontSize: 13, background: 'var(--warn)', boxShadow: 'none' }}>
+                    Delete everything
+                  </button>
+                </div>
+              </div>
+            )}
+          </SettingsGroup>
 
         </div>
         <div className="sheet-foot" style={{ flexDirection: 'column', gap: 8 }}>
@@ -1202,9 +1240,515 @@ function ProfileSheet({ open, onClose, user, goal, onOpenGoal, onSignOut }) {
   );
 }
 
+// ─────────────────────────────────────────────────────────────
+// Edit-profile sheet — same fields as onboarding, pre-filled,
+// recalculates goal without touching logs/plan/recipes
+// ─────────────────────────────────────────────────────────────
+function EditProfileSheet({ open, onClose, goal, onSave }) {
+  const [sex,       setSex]       = useState('male');
+  const [age,       setAge]       = useState(28);
+  const [heightCm,  setHeightCm]  = useState(175);
+  const [currentKg, setCurrentKg] = useState(75);
+  const [targetKg,  setTargetKg]  = useState(70);
+  const [activity,  setActivity]  = useState('moderate');
+  const [mode,      setMode]      = useState('maintain');
+
+  useEffect(() => {
+    if (open) {
+      setSex(goal.sex || 'male');
+      setAge(goal.age || 28);
+      setHeightCm(goal.heightCm || 175);
+      setCurrentKg(goal.currentKg || 75);
+      setTargetKg(goal.weightKg || 70);
+      setActivity(goal.activity || 'moderate');
+      setMode(goal.mode || 'maintain');
+    }
+  }, [open, goal]);
+
+  if (!open) return null;
+
+  const calculated = calcGoal({
+    sex, age: +age, heightCm: +heightCm,
+    currentKg: +currentKg, targetKg: +targetKg, activity, mode,
+  });
+
+  const activityOptions = [
+    { v: 'sedentary',   l: 'Sedentary',   s: 'Desk job, little exercise' },
+    { v: 'light',       l: 'Light',        s: '1–3 workouts / week' },
+    { v: 'moderate',    l: 'Moderate',     s: '3–5 workouts / week' },
+    { v: 'active',      l: 'Active',       s: '6–7 workouts / week' },
+    { v: 'very-active', l: 'Very active',  s: 'Hard exercise or physical job' },
+  ];
+
+  return (
+    <>
+      <div className="sheet-bg" onClick={onClose}/>
+      <div className="sheet">
+        <div className="sheet-grab"/>
+        <div className="sheet-hd">
+          <div>
+            <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.14em', color: 'var(--ink-3)' }}>
+              Update your details
+            </div>
+            <div className="serif" style={{ fontSize: 24 }}>Edit profile</div>
+          </div>
+          <button className="icon-btn" onClick={onClose}><Icon name="close" size={16}/></button>
+        </div>
+        <div className="sheet-body">
+          <div style={{ marginBottom: 18 }}>
+            <div className="eyebrow" style={{ marginBottom: 8 }}>Sex</div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              {['male','female'].map((s) => (
+                <button key={s} onClick={() => setSex(s)} className="chip"
+                  style={{
+                    flex: 1, justifyContent: 'center', padding: '10px 0', textTransform: 'capitalize',
+                    background: sex === s ? 'var(--ink)' : 'var(--surface-2)',
+                    color:      sex === s ? 'var(--bg)'  : 'var(--ink-2)',
+                  }}>{s}</button>
+              ))}
+            </div>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 18 }}>
+            <NumField label="Age" value={age} suffix="yrs" onChange={setAge}/>
+            <NumField label="Height" value={heightCm} suffix="cm" onChange={setHeightCm}/>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 18 }}>
+            <NumField label="Current weight" value={currentKg} suffix="kg" onChange={setCurrentKg}/>
+            <NumField label="Target weight"  value={targetKg}  suffix="kg" onChange={setTargetKg}/>
+          </div>
+          <div style={{ marginBottom: 18 }}>
+            <div className="eyebrow" style={{ marginBottom: 8 }}>Activity level</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {activityOptions.map(({ v, l, s }) => (
+                <button key={v} onClick={() => setActivity(v)} style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  padding: '11px 14px', borderRadius: 12, textAlign: 'left',
+                  background: activity === v ? 'var(--ink)' : 'var(--surface-2)',
+                  color:      activity === v ? 'var(--bg)'  : 'var(--ink)',
+                  transition: 'background 100ms',
+                }}>
+                  <div>
+                    <div style={{ fontSize: 14, fontWeight: 500 }}>{l}</div>
+                    <div style={{ fontSize: 12, opacity: 0.65, marginTop: 1 }}>{s}</div>
+                  </div>
+                  {activity === v && <Icon name="check" size={15}/>}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div style={{ marginBottom: 20 }}>
+            <div className="eyebrow" style={{ marginBottom: 8 }}>Goal</div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
+              {[
+                { id: 'lose',     label: 'Lose',     hint: '−0.5 kg/wk' },
+                { id: 'maintain', label: 'Maintain', hint: 'steady' },
+                { id: 'gain',     label: 'Gain',     hint: '+0.3 kg/wk' },
+              ].map((m) => (
+                <button key={m.id} onClick={() => setMode(m.id)} style={{
+                  padding: '14px 10px', borderRadius: 16, textAlign: 'center',
+                  background: mode === m.id ? 'var(--ink)' : 'var(--surface-2)',
+                  color:      mode === m.id ? 'var(--bg)'  : 'var(--ink)',
+                  transition: 'background 100ms',
+                }}>
+                  <div className="serif" style={{ fontSize: 18 }}>{m.label}</div>
+                  <div style={{ fontSize: 11, marginTop: 2, opacity: 0.7 }}>{m.hint}</div>
+                </button>
+              ))}
+            </div>
+          </div>
+          <div style={{ background: 'var(--surface-2)', borderRadius: 16, padding: 18 }}>
+            <div className="between" style={{ marginBottom: 14 }}>
+              <div>
+                <div className="eyebrow">New daily target</div>
+                <div className="numeric" style={{ fontSize: 42 }}>{calculated.kcal}</div>
+                <div style={{ fontSize: 12, color: 'var(--ink-3)', marginTop: 2 }}>kcal / day</div>
+              </div>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
+              {[
+                { label: 'Protein', v: calculated.protein, c: 'var(--p-color)' },
+                { label: 'Carbs',   v: calculated.carbs,   c: 'var(--c-color)' },
+                { label: 'Fat',     v: calculated.fat,     c: 'var(--f-color)' },
+              ].map((m) => (
+                <div key={m.label} style={{ background: 'var(--surface)', borderRadius: 12, padding: 10, textAlign: 'center' }}>
+                  <div className="numeric" style={{ fontSize: 22, color: m.c }}>{m.v}g</div>
+                  <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--ink-3)', marginTop: 2 }}>
+                    {m.label}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+        <div className="sheet-foot">
+          <button className="btn ghost" onClick={onClose}>Cancel</button>
+          <button className="btn" style={{ flex: 1 }} onClick={() => {
+            onSave({
+              ...goal,
+              ...calculated,
+              startKg: goal.startKg,
+              streak: goal.streak,
+              onboarded: true,
+            });
+            onClose();
+          }}>
+            Save changes
+          </button>
+        </div>
+      </div>
+    </>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// Recipe editor sheet — create or edit a recipe
+// ─────────────────────────────────────────────────────────────
+function RecipeEditorSheet({ open, onClose, recipe, foods, onSave }) {
+  const [name,         setName]         = useState('');
+  const [emoji,        setEmoji]        = useState('🍽️');
+  const [serves,       setServes]       = useState(1);
+  const [items,        setItems]        = useState([]); // [{food, grams, unitIndex}]
+  const [q,            setQ]            = useState('');
+  const [adding,       setAdding]       = useState(null);
+  const [addUnitIdx,   setAddUnitIdx]   = useState(0);
+  const [addAmount,    setAddAmount]    = useState(1);
+
+  useEffect(() => {
+    if (!open) return;
+    if (recipe) {
+      setName(recipe.name || '');
+      setEmoji(recipe.emoji || '🍽️');
+      setServes(recipe.serves || 1);
+      const loaded = (recipe.items || []).map((item) => {
+        const foodId = typeof item === 'string' ? item : item.foodId;
+        const grams  = typeof item === 'string'
+          ? (foods.find((f) => f.id === item)?.units[0].g ?? 100) : item.grams;
+        const food   = foods.find((f) => f.id === foodId);
+        return food ? { food, grams, unitIndex: typeof item === 'string' ? 0 : (item.unitIndex || 0) } : null;
+      }).filter(Boolean);
+      setItems(loaded);
+    } else {
+      setName(''); setEmoji('🍽️'); setServes(1); setItems([]);
+    }
+    setQ(''); setAdding(null);
+  }, [open, recipe]);
+
+  if (!open) return null;
+
+  const EMOJIS = ['🍽️','🥣','🥗','🍱','🥘','🍲','🥙','🌮','🌯','🥪','🍳','🥚','🍗','🐟','🥩','🥦','🥕','🍠','🍚','🥑','🥤','🧃','🍵','☕'];
+
+  const filtered = q ? foods.filter((f) => (f.name + ' ' + f.brand).toLowerCase().includes(q.toLowerCase())) : null;
+
+  const totals = items.reduce((s, { food, grams }) => {
+    const n = window.MACRO_DATA.nutritionFor(food, grams);
+    return { kcal: s.kcal + n.kcal, p: s.p + n.p, c: s.c + n.c, f: s.f + n.f };
+  }, { kcal: 0, p: 0, c: 0, f: 0 });
+
+  const startAdding = (food) => { setAdding(food); setAddUnitIdx(0); setAddAmount(1); setQ(''); };
+
+  const confirmAdd = () => {
+    const g = addUnitIdx === -1 ? Math.max(1, +addAmount)
+            : addUnitIdx === -2 ? Math.max(1, +addAmount) * 28.3495
+            : Math.max(1, +addAmount) * (adding.units[addUnitIdx]?.g || 100);
+    setItems((cur) => [...cur, { food: adding, grams: g, unitIndex: addUnitIdx < 0 ? -1 : addUnitIdx }]);
+    setAdding(null);
+  };
+
+  const allUnits = adding ? [
+    ...adding.units.map((u, i) => ({ idx: i, label: u.label })),
+    { idx: -1, label: 'grams' },
+    { idx: -2, label: 'ounces' },
+  ] : [];
+
+  return (
+    <>
+      <div className="sheet-bg" onClick={onClose}/>
+      <div className="sheet">
+        <div className="sheet-grab"/>
+        <div className="sheet-hd">
+          <div>
+            <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.14em', color: 'var(--ink-3)' }}>
+              {recipe ? 'Edit' : 'New'} recipe
+            </div>
+            <div className="serif" style={{ fontSize: 24 }}>{name || 'Untitled'}</div>
+          </div>
+          <button className="icon-btn" onClick={onClose}><Icon name="close" size={16}/></button>
+        </div>
+        <div className="sheet-body">
+          {/* Name + emoji */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', gap: 12, marginBottom: 14, alignItems: 'end' }}>
+            <div>
+              <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--ink-3)', marginBottom: 6 }}>Icon</div>
+              <div style={{
+                width: 56, height: 56, borderRadius: 16, background: 'var(--surface-2)',
+                display: 'grid', placeItems: 'center', fontSize: 28,
+              }}>{emoji}</div>
+            </div>
+            <div>
+              <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--ink-3)', marginBottom: 6 }}>Name</div>
+              <input value={name} onChange={(e) => setName(e.target.value)}
+                placeholder="Recipe name..."
+                style={{
+                  width: '100%', background: 'var(--surface-2)', border: 0, outline: 0,
+                  borderRadius: 12, padding: '13px 12px',
+                  fontFamily: 'var(--serif)', fontSize: 18, letterSpacing: '-0.01em',
+                }}/>
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 18 }}>
+            {EMOJIS.map((e) => (
+              <button key={e} onClick={() => setEmoji(e)} style={{
+                width: 34, height: 34, borderRadius: 9, fontSize: 18,
+                background: emoji === e ? 'var(--ink)' : 'var(--surface-2)',
+              }}>{e}</button>
+            ))}
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
+            <span style={{ fontSize: 13, color: 'var(--ink-3)', flex: 1 }}>Serves</span>
+            <button className="icon-btn" style={{ width: 28, height: 28 }}
+                    onClick={() => setServes((s) => Math.max(1, s - 1))}><Icon name="minus" size={12}/></button>
+            <span className="numeric" style={{ fontSize: 22, minWidth: 24, textAlign: 'center' }}>{serves}</span>
+            <button className="icon-btn" style={{ width: 28, height: 28 }}
+                    onClick={() => setServes((s) => s + 1)}><Icon name="plus" size={12}/></button>
+          </div>
+
+          {items.length > 0 && (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, marginBottom: 18 }}>
+              {[
+                { l: 'kcal', v: Math.round(totals.kcal), c: 'var(--ink)' },
+                { l: 'P', v: Math.round(totals.p)+'g', c: 'var(--p-color)' },
+                { l: 'C', v: Math.round(totals.c)+'g', c: 'var(--c-color)' },
+                { l: 'F', v: Math.round(totals.f)+'g', c: 'var(--f-color)' },
+              ].map((m) => (
+                <div key={m.l} style={{ background: 'var(--surface-2)', borderRadius: 12, padding: '10px 8px', textAlign: 'center' }}>
+                  <div className="numeric" style={{ fontSize: 18, color: m.c }}>{m.v}</div>
+                  <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--ink-3)' }}>{m.l}</div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--ink-3)', marginBottom: 8 }}>
+            Ingredients ({items.length})
+          </div>
+          {items.map(({ food, grams, unitIndex }, i) => {
+            const unit = unitIndex >= 0 && food.units[unitIndex] ? food.units[unitIndex] : null;
+            const label = unit ? unit.label : `${Math.round(grams)}g`;
+            const n = window.MACRO_DATA.nutritionFor(food, grams);
+            return (
+              <div key={i} style={{
+                display: 'grid', gridTemplateColumns: '36px 1fr auto', gap: 10, alignItems: 'center',
+                padding: '10px 0', borderBottom: '1px solid var(--line)',
+              }}>
+                <div className="food-emoji">{food.emoji}</div>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 500 }}>{food.name}</div>
+                  <div style={{ fontSize: 11, color: 'var(--ink-3)' }}>{label} · {Math.round(n.kcal)} kcal</div>
+                </div>
+                <button onClick={() => setItems((cur) => cur.filter((_, j) => j !== i))}
+                        style={{ color: 'var(--warn)', padding: 4 }}>
+                  <Icon name="minus" size={14}/>
+                </button>
+              </div>
+            );
+          })}
+
+          {!adding && (
+            <div style={{ marginTop: 14 }}>
+              <div className="search" style={{ boxShadow: 'inset 0 0 0 1px var(--line-2)' }}>
+                <Icon name="search" size={16}/>
+                <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search ingredients..."/>
+              </div>
+              {filtered && filtered.length === 0 && (
+                <div style={{ padding: '20px 0', textAlign: 'center', color: 'var(--ink-3)', fontSize: 13 }}>No matches</div>
+              )}
+              {filtered && filtered.map((f) => (
+                <button key={f.id} onClick={() => startAdding(f)} style={{
+                  display: 'grid', gridTemplateColumns: '36px 1fr auto', gap: 12, alignItems: 'center',
+                  padding: '10px 0', borderBottom: '1px solid var(--line)', width: '100%', textAlign: 'left',
+                }}>
+                  <div className="food-emoji">{f.emoji}</div>
+                  <div>
+                    <div className="food-name">{f.name}</div>
+                    <div className="food-meta">{f.brand}</div>
+                  </div>
+                  <Icon name="plus" size={16}/>
+                </button>
+              ))}
+            </div>
+          )}
+
+          {adding && (() => {
+            const isG  = addUnitIdx === -1;
+            const isOz = addUnitIdx === -2;
+            const grams = isG  ? Math.max(0, +addAmount)
+                        : isOz ? Math.max(0, +addAmount) * 28.3495
+                        : Math.max(0, +addAmount) * (adding.units[Math.max(0, addUnitIdx)]?.g || 100);
+            const n = window.MACRO_DATA.nutritionFor(adding, grams);
+            return (
+              <div style={{ marginTop: 14 }}>
+                <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 14 }}>
+                  <div style={{
+                    width: 52, height: 52, borderRadius: 14, background: 'var(--surface-2)',
+                    display: 'grid', placeItems: 'center', fontSize: 26,
+                  }}>{adding.emoji}</div>
+                  <div>
+                    <div className="serif" style={{ fontSize: 18 }}>{adding.name}</div>
+                    <div style={{ fontSize: 12, color: 'var(--ink-3)' }}>{adding.brand}</div>
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}>
+                  {allUnits.map((u) => (
+                    <button key={u.idx} className="chip"
+                      onClick={() => { setAddUnitIdx(u.idx); setAddAmount(u.idx < 0 ? (u.idx === -1 ? 100 : 4) : 1); }}
+                      style={{
+                        background: addUnitIdx === u.idx ? 'var(--ink)' : 'var(--surface-2)',
+                        color: addUnitIdx === u.idx ? 'var(--bg)' : 'var(--ink-2)',
+                      }}>
+                      {u.label}
+                    </button>
+                  ))}
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', borderRadius: 14, background: 'var(--surface-2)', marginBottom: 12 }}>
+                  <div style={{ fontSize: 12, color: 'var(--ink-3)' }}>{grams.toFixed(0)} g</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <button className="icon-btn" style={{ width: 28, height: 28 }}
+                            onClick={() => setAddAmount((a) => Math.max(0, +(+a - (isG ? 10 : 0.5)).toFixed(1)))}>
+                      <Icon name="minus" size={12}/>
+                    </button>
+                    <input type="number" value={addAmount} min="0"
+                      onChange={(e) => setAddAmount(e.target.value === '' ? '' : +e.target.value)}
+                      style={{
+                        width: 64, textAlign: 'center', background: 'var(--surface)', border: 0, outline: 0,
+                        borderRadius: 8, padding: '6px 8px', fontFamily: 'var(--serif)', fontSize: 20,
+                      }}/>
+                    <button className="icon-btn" style={{ width: 28, height: 28 }}
+                            onClick={() => setAddAmount((a) => +(+a + (isG ? 10 : 0.5)).toFixed(1))}>
+                      <Icon name="plus" size={12}/>
+                    </button>
+                  </div>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6, marginBottom: 14 }}>
+                  {[
+                    { l: 'kcal', v: Math.round(n.kcal), c: 'var(--ink)' },
+                    { l: 'P', v: Math.round(n.p)+'g', c: 'var(--p-color)' },
+                    { l: 'C', v: Math.round(n.c)+'g', c: 'var(--c-color)' },
+                    { l: 'F', v: Math.round(n.f)+'g', c: 'var(--f-color)' },
+                  ].map((m) => (
+                    <div key={m.l} style={{ background: 'var(--surface-2)', borderRadius: 10, padding: '8px 6px', textAlign: 'center' }}>
+                      <div className="numeric" style={{ fontSize: 16, color: m.c }}>{m.v}</div>
+                      <div style={{ fontSize: 10, textTransform: 'uppercase', color: 'var(--ink-3)' }}>{m.l}</div>
+                    </div>
+                  ))}
+                </div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button className="btn ghost" onClick={() => setAdding(null)}>Back</button>
+                  <button className="btn" style={{ flex: 1 }} onClick={confirmAdd}>
+                    <Icon name="plus" size={14}/> Add ingredient
+                  </button>
+                </div>
+              </div>
+            );
+          })()}
+        </div>
+        <div className="sheet-foot">
+          <button className="btn ghost" onClick={onClose}>Cancel</button>
+          <button className="btn" style={{ flex: 1, opacity: (!name.trim() || items.length === 0) ? 0.5 : 1 }}
+                  onClick={() => {
+                    if (!name.trim() || items.length === 0) return;
+                    onSave({
+                      id: recipe?.id || ('r' + Date.now()),
+                      name: name.trim(), emoji, serves,
+                      items: items.map(({ food, grams, unitIndex }) => ({ foodId: food.id, grams, unitIndex })),
+                    });
+                    onClose();
+                  }}>
+            <Icon name="check" size={14}/> {recipe ? 'Save changes' : 'Create recipe'}
+          </button>
+        </div>
+      </div>
+    </>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// Log-weight sheet
+// ─────────────────────────────────────────────────────────────
+function LogWeightSheet({ open, onClose, goal, onConfirm }) {
+  const [weight, setWeight] = useState(70);
+  useEffect(() => { if (open) setWeight(+(goal.currentKg || 70)); }, [open, goal]);
+  if (!open) return null;
+
+  const hasBio = goal.sex && goal.age && goal.heightCm && goal.activity;
+  const diff   = +(+weight - goal.currentKg).toFixed(1);
+
+  return (
+    <>
+      <div className="sheet-bg" onClick={onClose}/>
+      <div className="sheet">
+        <div className="sheet-grab"/>
+        <div className="sheet-hd">
+          <div className="serif" style={{ fontSize: 24 }}>Log weight</div>
+          <button className="icon-btn" onClick={onClose}><Icon name="close" size={16}/></button>
+        </div>
+        <div className="sheet-body">
+          <div style={{ textAlign: 'center', paddingTop: 24, paddingBottom: 20 }}>
+            <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.14em', color: 'var(--ink-3)', marginBottom: 16 }}>
+              Today's weight
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 16, justifyContent: 'center' }}>
+              <button className="icon-btn" style={{ width: 40, height: 40 }}
+                      onClick={() => setWeight((w) => Math.max(30, +(+w - 0.1).toFixed(1)))}>
+                <Icon name="minus" size={16}/>
+              </button>
+              <input type="number" value={weight} step="0.1" min="30" max="300"
+                onChange={(e) => setWeight(e.target.value === '' ? '' : +e.target.value)}
+                style={{
+                  width: 150, textAlign: 'center', background: 'var(--surface-2)', border: 0, outline: 0,
+                  borderRadius: 16, padding: '16px 20px',
+                  fontFamily: 'var(--serif)', fontSize: 48, letterSpacing: '-0.03em',
+                }}/>
+              <button className="icon-btn" style={{ width: 40, height: 40 }}
+                      onClick={() => setWeight((w) => +(+w + 0.1).toFixed(1))}>
+                <Icon name="plus" size={16}/>
+              </button>
+            </div>
+            <div style={{ fontSize: 14, color: 'var(--ink-3)', marginTop: 8 }}>kg</div>
+            {diff !== 0 && (
+              <div style={{ fontSize: 13, color: diff < 0 ? 'var(--accent)' : 'var(--warn)', marginTop: 8 }}>
+                {diff < 0 ? `↓ ${Math.abs(diff)} kg since last entry` : `↑ ${diff} kg since last entry`}
+              </div>
+            )}
+          </div>
+        </div>
+        <div className="sheet-foot" style={{ flexDirection: 'column', gap: 8 }}>
+          {hasBio ? (
+            <>
+              <button className="btn" style={{ width: '100%' }}
+                      onClick={() => { onConfirm(+weight, true); onClose(); }}>
+                Log weight & update goal
+              </button>
+              <button style={{ fontSize: 13, color: 'var(--ink-3)', padding: '4px 0', textAlign: 'center' }}
+                      onClick={() => { onConfirm(+weight, false); onClose(); }}>
+                Just log the weight
+              </button>
+            </>
+          ) : (
+            <button className="btn" style={{ width: '100%' }}
+                    onClick={() => { onConfirm(+weight, false); onClose(); }}>
+              Log weight
+            </button>
+          )}
+        </div>
+      </div>
+    </>
+  );
+}
+
 // Export to window
 Object.assign(window, {
   Icon, CalorieRing, MacroBars, MacroDonut, WeightChart, StepBars,
   QuickLog, MealSection, AddFoodSheet, GoalSheet,
   SettingsSheet, ProfileSheet, OnboardingSheet, calcGoal,
+  EditProfileSheet, RecipeEditorSheet, LogWeightSheet,
 });

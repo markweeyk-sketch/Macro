@@ -63,10 +63,13 @@
   function savePlan(uid, plan) {
     return db.collection('users').doc(uid).set({ weekPlan: plan }, { merge: true });
   }
+  function saveWeights(uid, weights) {
+    return db.collection('users').doc(uid).set({ weights }, { merge: true });
+  }
 
   window.MACRO_FIREBASE = {
     auth, todayKey,
     signInWithGoogle, signInWithEmail, signUpWithEmail, signOutUser,
-    loadUserData, saveGoal, saveRecipes, loadDayLog, saveDayLog, savePlan,
+    loadUserData, saveGoal, saveRecipes, loadDayLog, saveDayLog, savePlan, saveWeights,
   };
 })();
