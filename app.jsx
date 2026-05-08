@@ -58,6 +58,8 @@ function App() {
   const [authReady, setAuthReady] = useState(!FB || !persist);
   const [showAuth, setShowAuth]   = useState(false);
   const [showMigrate, setShowMigrate] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [showProfile, setShowProfile] = useState(false);
   const pendingUserRef = useRef(null); // user awaiting migration decision
   const syncRef  = useRef(false);      // true → safe to write to Firestore
   const userRef  = useRef(null);       // mirrors user for use inside effects
@@ -243,9 +245,12 @@ function App() {
   return (
     <div className="app" ref={themeScopeRef}>
       <Sidebar route={route} setRoute={setRoute} goal={goal} totals={totals}
-               user={user} onSignIn={() => setShowAuth(true)} onSignOut={handleSignOut}/>
+               user={user} onSignIn={() => setShowAuth(true)} onSignOut={handleSignOut}
+               onOpenSettings={() => setShowSettings(true)}
+               onOpenProfile={() => setShowProfile(true)}/>
       <TopBar setRoute={setRoute} route={route}
-              user={user} onSignIn={() => setShowAuth(true)}/>
+              user={user} onSignIn={() => setShowAuth(true)}
+              onOpenSettings={() => setShowSettings(true)}/>
       <main className="content">
         {route === 'today'    && <TodayPage {...props}/>}
         {route === 'log'      && <LogPage {...props}/>}
@@ -271,6 +276,21 @@ function App() {
         onMigrate={() => handleMigrate(true)}
         onSkip={() => handleMigrate(false)}
       />
+      <SettingsSheet
+        open={showSettings} onClose={() => setShowSettings(false)}
+        tweaks={tweaks} setTweak={setTweak}
+        user={user} goal={goal}
+        onSignIn={() => { setShowSettings(false); setShowAuth(true); }}
+        onSignOut={() => { setShowSettings(false); handleSignOut(); }}
+        onOpenProfile={() => { setShowSettings(false); setShowProfile(true); }}
+        onOpenGoal={() => { setShowSettings(false); setSheet({ kind: 'goal' }); }}
+      />
+      <ProfileSheet
+        open={showProfile} onClose={() => setShowProfile(false)}
+        user={user} goal={goal}
+        onOpenGoal={() => { setShowProfile(false); setSheet({ kind: 'goal' }); }}
+        onSignOut={() => { setShowProfile(false); handleSignOut(); }}
+      />
 
       {!F.hideTweaks && <TweaksPanelUI tweaks={tweaks} setTweak={setTweak}/>}
     </div>
@@ -288,7 +308,7 @@ function mealNow() {
 // ─────────────────────────────────────────────────────────────
 // Sidebar (desktop)
 // ─────────────────────────────────────────────────────────────
-function Sidebar({ route, setRoute, goal, totals, user, onSignIn, onSignOut }) {
+function Sidebar({ route, setRoute, goal, totals, user, onSignIn, onSignOut, onOpenSettings, onOpenProfile }) {
   const items = [
     { id: 'today',    label: 'Today',     icon: 'home' },
     { id: 'log',      label: 'Food log',  icon: 'book' },
@@ -337,11 +357,11 @@ function Sidebar({ route, setRoute, goal, totals, user, onSignIn, onSignOut }) {
       ))}
 
       <div className="nav-group-label">Account</div>
-      <button className="nav-item">
+      <button className="nav-item" onClick={onOpenProfile}>
         <span className="ico"><Icon name="user" size={16}/></span>
         Profile
       </button>
-      <button className="nav-item">
+      <button className="nav-item" onClick={onOpenSettings}>
         <span className="ico"><Icon name="settings" size={16}/></span>
         Settings
       </button>
@@ -378,7 +398,7 @@ function Sidebar({ route, setRoute, goal, totals, user, onSignIn, onSignOut }) {
 // ─────────────────────────────────────────────────────────────
 // Top bar (mobile only)
 // ─────────────────────────────────────────────────────────────
-function TopBar({ route, setRoute, user, onSignIn }) {
+function TopBar({ route, setRoute, user, onSignIn, onOpenSettings }) {
   const titles = {
     today: 'Today', log: 'Food log', plan: 'Meal plan', recipes: 'Recipes', progress: 'Progress',
   };
@@ -393,7 +413,7 @@ function TopBar({ route, setRoute, user, onSignIn }) {
       <div className="topbar-actions">
         <button className="icon-btn"><Icon name="search" size={16}/></button>
         {user
-          ? <button className="icon-btn"><Icon name="user" size={16}/></button>
+          ? <button className="icon-btn" onClick={onOpenSettings}><Icon name="user" size={16}/></button>
           : <button className="btn sm" onClick={onSignIn}>Sign in</button>
         }
       </div>

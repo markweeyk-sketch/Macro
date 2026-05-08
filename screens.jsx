@@ -716,8 +716,305 @@ function NumField({ label, value, suffix, onChange }) {
   );
 }
 
+// ─────────────────────────────────────────────────────────────
+// Settings sheet helpers
+// ─────────────────────────────────────────────────────────────
+function SettingsGroup({ label, children }) {
+  return (
+    <div style={{ marginBottom: 24 }}>
+      {label && (
+        <div style={{
+          fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.12em',
+          color: 'var(--ink-3)', marginBottom: 8, paddingLeft: 4,
+        }}>{label}</div>
+      )}
+      <div className="settings-card">{children}</div>
+    </div>
+  );
+}
+
+function SettingsRow({ label, sub, children }) {
+  return (
+    <div className="settings-row">
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div className="settings-row-label">{label}</div>
+        {sub && <div className="settings-row-sub">{sub}</div>}
+      </div>
+      {children && <div style={{ flexShrink: 0 }}>{children}</div>}
+    </div>
+  );
+}
+
+function SettingsRowBtn({ label, sub, icon, onClick, danger }) {
+  return (
+    <button className="settings-row-btn" onClick={onClick}
+            style={{ color: danger ? 'var(--warn)' : undefined }}>
+      {icon && (
+        <span style={{ color: danger ? 'var(--warn)' : 'var(--ink-3)', flexShrink: 0 }}>
+          <Icon name={icon} size={16}/>
+        </span>
+      )}
+      <div style={{ flex: 1, minWidth: 0, textAlign: 'left' }}>
+        <div className="settings-row-label" style={{ color: danger ? 'var(--warn)' : undefined }}>
+          {label}
+        </div>
+        {sub && <div className="settings-row-sub">{sub}</div>}
+      </div>
+      <Icon name="chevron" size={14} stroke={1.5}/>
+    </button>
+  );
+}
+
+function SettingsToggle({ value, onChange }) {
+  return (
+    <button onClick={() => onChange(!value)} style={{
+      width: 44, height: 26, borderRadius: 13, padding: 0,
+      background: value ? 'var(--ink)' : 'var(--surface-2)',
+      border: '1px solid var(--line-2)',
+      position: 'relative', flexShrink: 0,
+      transition: 'background 200ms',
+    }}>
+      <div style={{
+        position: 'absolute',
+        top: 2, left: value ? 19 : 2,
+        width: 20, height: 20, borderRadius: '50%',
+        background: value ? 'var(--bg)' : 'var(--surface)',
+        boxShadow: '0 1px 3px rgba(0,0,0,0.18)',
+        transition: 'left 200ms cubic-bezier(.4,0,.2,1)',
+      }}/>
+    </button>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// Settings sheet
+// ─────────────────────────────────────────────────────────────
+function SettingsSheet({ open, onClose, tweaks, setTweak, user, goal, onSignIn, onSignOut, onOpenProfile, onOpenGoal }) {
+  if (!open) return null;
+
+  const isDark = tweaks.theme === 'graphite';
+  const lightThemes = [
+    { key: 'bone',   bg: '#F7F4EE', label: 'Natural' },
+    { key: 'citrus', bg: '#FBF7EF', label: 'Citrus' },
+    { key: 'marine', bg: '#EFF1F2', label: 'Marine' },
+  ];
+
+  const toggleDark = () => {
+    if (isDark) {
+      setTweak('theme', tweaks._lastLight || 'bone');
+    } else {
+      setTweak({ _lastLight: tweaks.theme, theme: 'graphite' });
+    }
+  };
+
+  return (
+    <>
+      <div className="sheet-bg" onClick={onClose}/>
+      <div className="sheet">
+        <div className="sheet-grab"/>
+        <div className="sheet-hd">
+          <div className="serif" style={{ fontSize: 24 }}>Settings</div>
+          <button className="icon-btn" onClick={onClose}><Icon name="close" size={16}/></button>
+        </div>
+        <div className="sheet-body">
+
+          <SettingsGroup label="Appearance">
+            <SettingsRow label="Dark mode" sub="Switch to Graphite theme">
+              <SettingsToggle value={isDark} onChange={toggleDark}/>
+            </SettingsRow>
+            {!isDark && (
+              <SettingsRow label="Colour theme">
+                <div style={{ display: 'flex', gap: 8 }}>
+                  {lightThemes.map((t) => (
+                    <button key={t.key} title={t.label}
+                      onClick={() => setTweak('theme', t.key)}
+                      style={{
+                        width: 26, height: 26, borderRadius: '50%', padding: 0,
+                        background: t.bg,
+                        outline: tweaks.theme === t.key
+                          ? '2px solid var(--ink)' : '1px solid var(--line-2)',
+                        outlineOffset: 2, flexShrink: 0, transition: 'outline 150ms',
+                      }}/>
+                  ))}
+                </div>
+              </SettingsRow>
+            )}
+          </SettingsGroup>
+
+          <SettingsGroup label="Dashboard">
+            <SettingsRow label="Layout">
+              <div style={{ display: 'flex', gap: 6 }}>
+                {[
+                  { v: 'rings',   l: 'Ring' },
+                  { v: 'bars',    l: 'Bars' },
+                  { v: 'minimal', l: 'Min'  },
+                ].map(({ v, l }) => (
+                  <button key={v} className="chip"
+                    onClick={() => setTweak('dashboardLayout', v)}
+                    style={{
+                      background: tweaks.dashboardLayout === v ? 'var(--ink)' : 'var(--surface-2)',
+                      color:      tweaks.dashboardLayout === v ? 'var(--bg)'  : 'var(--ink-2)',
+                    }}>
+                    {l}
+                  </button>
+                ))}
+              </div>
+            </SettingsRow>
+            <SettingsRow label="Streak card">
+              <SettingsToggle value={tweaks.showStreak} onChange={(v) => setTweak('showStreak', v)}/>
+            </SettingsRow>
+            <SettingsRow label="Steps card">
+              <SettingsToggle value={tweaks.showSteps} onChange={(v) => setTweak('showSteps', v)}/>
+            </SettingsRow>
+          </SettingsGroup>
+
+          <SettingsGroup label="Account">
+            {user ? (
+              <>
+                <SettingsRowBtn
+                  label={user.displayName || 'Profile'} sub={user.email}
+                  icon="user" onClick={onOpenProfile}/>
+                {goal && (
+                  <SettingsRowBtn
+                    label="Daily goal" sub={`${goal.kcal} kcal · ${goal.mode}`}
+                    icon="target" onClick={onOpenGoal}/>
+                )}
+                <SettingsRowBtn label="Sign out" icon="arrowR" onClick={onSignOut} danger/>
+              </>
+            ) : (
+              <SettingsRowBtn
+                label="Sign in or create account"
+                icon="user" onClick={onSignIn}/>
+            )}
+          </SettingsGroup>
+
+        </div>
+      </div>
+    </>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// Profile sheet
+// ─────────────────────────────────────────────────────────────
+function ProfileSheet({ open, onClose, user, goal, onOpenGoal, onSignOut }) {
+  const [pwMsg, setPwMsg] = useState('');
+  if (!open || !user) return null;
+
+  const FB = window.MACRO_FIREBASE;
+  const initials = user.displayName
+    ? user.displayName.split(' ').filter(Boolean).map((n) => n[0]).join('').slice(0, 2).toUpperCase()
+    : (user.email?.[0] || '?').toUpperCase();
+
+  const memberSince = user.metadata?.creationTime
+    ? new Date(user.metadata.creationTime).toLocaleDateString([], { month: 'long', year: 'numeric' })
+    : null;
+
+  const isEmailUser = user.providerData?.some((p) => p.providerId === 'password');
+
+  const sendReset = async () => {
+    try {
+      await FB.auth.sendPasswordResetEmail(user.email);
+      setPwMsg('Reset email sent!');
+    } catch {
+      setPwMsg('Could not send reset email.');
+    }
+  };
+
+  return (
+    <>
+      <div className="sheet-bg" onClick={onClose}/>
+      <div className="sheet">
+        <div className="sheet-grab"/>
+        <div className="sheet-hd">
+          <div className="serif" style={{ fontSize: 24 }}>Profile</div>
+          <button className="icon-btn" onClick={onClose}><Icon name="close" size={16}/></button>
+        </div>
+        <div className="sheet-body">
+
+          {/* Avatar + name */}
+          <div style={{ textAlign: 'center', marginBottom: 28, paddingTop: 8 }}>
+            <div style={{
+              width: 80, height: 80, borderRadius: '50%',
+              background: 'linear-gradient(135deg, var(--accent-soft), var(--accent))',
+              color: 'var(--bg)', display: 'grid', placeItems: 'center',
+              fontSize: 30, fontWeight: 600, margin: '0 auto 12px',
+            }}>{initials}</div>
+            <div className="serif" style={{ fontSize: 22, letterSpacing: '-0.01em' }}>
+              {user.displayName || 'Account'}
+            </div>
+            {memberSince && (
+              <div style={{ fontSize: 12, color: 'var(--ink-3)', marginTop: 4 }}>
+                Member since {memberSince}
+              </div>
+            )}
+          </div>
+
+          {/* Stats grid */}
+          {goal && (
+            <div style={{
+              display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)',
+              gap: 10, marginBottom: 24,
+            }}>
+              {[
+                { label: 'Streak',  value: `${goal.streak}d` },
+                { label: 'Lost',    value: `${Math.max(0, +(goal.startKg - goal.currentKg).toFixed(1))}kg` },
+                { label: 'To goal', value: `${Math.max(0, +(goal.currentKg - goal.weightKg).toFixed(1))}kg` },
+              ].map((s) => (
+                <div key={s.label} style={{
+                  background: 'var(--surface-2)', borderRadius: 14,
+                  padding: '14px 10px', textAlign: 'center',
+                }}>
+                  <div className="numeric" style={{ fontSize: 24 }}>{s.value}</div>
+                  <div style={{
+                    fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.1em',
+                    color: 'var(--ink-3)', marginTop: 2,
+                  }}>{s.label}</div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <SettingsGroup label="Account details">
+            <SettingsRow label="Email">
+              <div style={{ fontSize: 13, color: 'var(--ink-3)', maxWidth: 200, textAlign: 'right', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {user.email}
+              </div>
+            </SettingsRow>
+            {isEmailUser && (
+              <SettingsRowBtn
+                label={pwMsg || 'Reset password'}
+                sub={pwMsg ? '' : 'Send a reset link to your inbox'}
+                icon="arrowR"
+                onClick={sendReset}
+              />
+            )}
+          </SettingsGroup>
+
+          {goal && (
+            <SettingsGroup label="Nutrition">
+              <SettingsRowBtn
+                label="Daily goal" sub={`${goal.kcal} kcal · ${goal.mode}`}
+                icon="target" onClick={onOpenGoal}/>
+            </SettingsGroup>
+          )}
+
+        </div>
+        <div className="sheet-foot" style={{ flexDirection: 'column', gap: 8 }}>
+          <button className="btn ghost"
+                  style={{ width: '100%', color: 'var(--warn)', boxShadow: 'inset 0 0 0 1px rgba(198,106,58,0.3)' }}
+                  onClick={onSignOut}>
+            Sign out
+          </button>
+        </div>
+      </div>
+    </>
+  );
+}
+
 // Export to window
 Object.assign(window, {
   Icon, CalorieRing, MacroBars, MacroDonut, WeightChart, StepBars,
   QuickLog, MealSection, AddFoodSheet, GoalSheet,
+  SettingsSheet, ProfileSheet,
 });
