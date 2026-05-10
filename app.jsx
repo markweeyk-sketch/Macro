@@ -1,4 +1,4 @@
-// Macro — main app
+﻿// Macro — main app
 // Composes the responsive shell, routes, and state.
 
 const { useState, useEffect, useMemo, useRef } = React;
@@ -1348,16 +1348,16 @@ function RecipesPage(props) {
 // ─────────────────────────────────────────────────────────────
 function ProgressPage(props) {
   const { goal, weights, onLogWeight } = props;
-  const [range, setRange] = useState(‘30d’);
+  const [range, setRange] = useState('30d');
 
   const displayEntries = useMemo(() => {
     if (!weights || weights.length === 0) return [];
     const now = new Date();
     const day = 86400000;
-    const cutoff = range === ‘7d’  ? new Date(now - 7  * day).toISOString().slice(0, 10)
-                 : range === ‘30d’ ? new Date(now - 30 * day).toISOString().slice(0, 10)
-                 : range === ‘3m’  ? new Date(now - 90 * day).toISOString().slice(0, 10)
-                 : ‘0000-00-00’;
+    const cutoff = range === '7d'  ? new Date(now - 7  * day).toISOString().slice(0, 10)
+                 : range === '30d' ? new Date(now - 30 * day).toISOString().slice(0, 10)
+                 : range === '3m'  ? new Date(now - 90 * day).toISOString().slice(0, 10)
+                 : '0000-00-00';
     return weights.filter((e) => e.date >= cutoff);
   }, [weights, range]);
 
@@ -1370,19 +1370,19 @@ function ProgressPage(props) {
   const insights = useMemo(() => {
     const list = [];
     if (goal.streak >= 3) {
-      list.push({ i: ‘flame’, t: `${goal.streak}-day streak`, s: ‘Consistent logging builds habits — keep it up.’ });
+      list.push({ i: 'flame', t: `${goal.streak}-day streak`, s: "Consistent logging builds habits — keep it up." });
     }
     if (weights && weights.length >= 2) {
       const first = weights[0].weight;
       const last  = weights[weights.length - 1].weight;
       const diff  = +(last - first).toFixed(1);
-      if (diff < 0) list.push({ i: ‘bolt’, t: `Down ${Math.abs(diff)} kg total`, s: `From ${first} kg to ${last} kg. You’re making real progress.` });
-      else if (diff > 0) list.push({ i: ‘bolt’, t: `Up ${diff} kg total`, s: `From ${first} kg to ${last} kg since you started tracking.` });
+      if (diff < 0) list.push({ i: 'bolt', t: `Down ${Math.abs(diff)} kg total`, s: `From ${first} kg to ${last} kg. You're making real progress.` });
+      else if (diff > 0) list.push({ i: 'bolt', t: `Up ${diff} kg total`, s: `From ${first} kg to ${last} kg since you started tracking.` });
     }
     const left = Math.abs(toGo);
-    if (left > 0 && goal.mode !== ‘maintain’ && goal.rate) {
+    if (left > 0 && goal.mode !== 'maintain' && goal.rate) {
       const weeksLeft = Math.ceil(left / goal.rate);
-      list.push({ i: ‘target’, t: `${left} kg to goal`, s: `At ${goal.rate} kg/wk, you could reach your goal in ~${weeksLeft} week${weeksLeft !== 1 ? ‘s’ : ‘’}.` });
+      list.push({ i: 'target', t: `${left} kg to goal`, s: `At ${goal.rate} kg/wk, you could reach your goal in ~${weeksLeft} week${weeksLeft !== 1 ? 's' : ''}.` });
     }
     return list;
   }, [goal, weights, toGo]);
@@ -1400,32 +1400,32 @@ function ProgressPage(props) {
       </header>
 
       <section className="padded grid-2">
-        <div className="card" style={{ gridColumn: ‘1 / -1’ }}>
-          <div className="card-hd" style={{ flexWrap: ‘wrap’, gap: 12 }}>
+        <div className="card" style={{ gridColumn: '1 / -1' }}>
+          <div className="card-hd" style={{ flexWrap: 'wrap', gap: 12 }}>
             <div>
               <div className="eyebrow">Weight</div>
-              <div className="row" style={{ alignItems: ‘baseline’, gap: 10, flexWrap: ‘wrap’ }}>
+              <div className="row" style={{ alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
                 <span className="numeric" style={{ fontSize: 44 }}>{currentKg}</span>
-                <span style={{ fontSize: 14, color: ‘var(--ink-3)’ }}>kg</span>
+                <span style={{ fontSize: 14, color: 'var(--ink-3)' }}>kg</span>
                 {delta !== 0 && (
-                  <span className="chip" style={{ background: ‘transparent’, color: ‘var(--accent)’, padding: 0 }}>
-                    {delta > 0 ? ‘↓’ : ‘↑’} {Math.abs(delta)} kg
+                  <span className="chip" style={{ background: 'transparent', color: 'var(--accent)', padding: 0 }}>
+                    {delta > 0 ? '↓' : '↑'} {Math.abs(delta)} kg
                   </span>
                 )}
               </div>
             </div>
-            <div style={{ display: ‘flex’, flexDirection: ‘column’, alignItems: ‘flex-end’, gap: 8 }}>
-              <div style={{ textAlign: ‘right’ }}>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8 }}>
+              <div style={{ textAlign: 'right' }}>
                 <div className="eyebrow">To goal</div>
                 <div className="numeric" style={{ fontSize: 22 }}>{toGo} kg</div>
               </div>
-              <div style={{ display: ‘flex’, gap: 4, flexWrap: ‘wrap’, justifyContent: ‘flex-end’ }}>
-                {[‘7d’,’30d’,’3m’,’all’].map((r) => (
+              <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                {['7d','30d','3m','all'].map((r) => (
                   <button key={r} onClick={() => setRange(r)} className="chip"
                     style={{
-                      fontSize: 11, cursor: ‘pointer’,
-                      background: range === r ? ‘var(--ink)’ : ‘var(--surface-2)’,
-                      color:      range === r ? ‘var(--bg)’  : ‘var(--ink-2)’,
+                      fontSize: 11, cursor: 'pointer',
+                      background: range === r ? 'var(--ink)' : 'var(--surface-2)',
+                      color:      range === r ? 'var(--bg)'  : 'var(--ink-2)',
                     }}>
                     {r}
                   </button>
@@ -1438,14 +1438,14 @@ function ProgressPage(props) {
 
         <div className="card">
           <div className="eyebrow" style={{ marginBottom: 10 }}>Avg calories · 7d</div>
-          <div style={{ padding: ‘16px 0’, textAlign: ‘center’, color: ‘var(--ink-3)’, fontSize: 13, lineHeight: 1.6 }}>
+          <div style={{ padding: '16px 0', textAlign: 'center', color: 'var(--ink-3)', fontSize: 13, lineHeight: 1.6 }}>
             No calorie history yet.<br/>Log meals daily to see your trends.
           </div>
         </div>
 
         <div className="card">
           <div className="eyebrow" style={{ marginBottom: 10 }}>Macro adherence</div>
-          <div style={{ padding: ‘16px 0’, textAlign: ‘center’, color: ‘var(--ink-3)’, fontSize: 13, lineHeight: 1.6 }}>
+          <div style={{ padding: '16px 0', textAlign: 'center', color: 'var(--ink-3)', fontSize: 13, lineHeight: 1.6 }}>
             No macro history yet.<br/>Track meals to see adherence.
           </div>
         </div>
@@ -1458,22 +1458,22 @@ function ProgressPage(props) {
             {insights.length > 0 && <span className="chip">{insights.length}</span>}
           </div>
           {insights.length === 0 ? (
-            <div style={{ padding: ‘16px 0’, textAlign: ‘center’, color: ‘var(--ink-3)’, fontSize: 13, lineHeight: 1.6 }}>
+            <div style={{ padding: '16px 0', textAlign: 'center', color: 'var(--ink-3)', fontSize: 13, lineHeight: 1.6 }}>
               Start logging meals and weight<br/>to unlock personal insights.
             </div>
           ) : (
-            <div style={{ display: ‘flex’, flexDirection: ‘column’, gap: 10 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               {insights.map((x, i) => (
-                <div key={i} className="row" style={{ padding: 14, background: ‘var(--surface-2)’, borderRadius: 14 }}>
+                <div key={i} className="row" style={{ padding: 14, background: 'var(--surface-2)', borderRadius: 14 }}>
                   <div style={{
-                    width: 36, height: 36, borderRadius: 10, background: ‘var(--surface)’,
-                    display: ‘grid’, placeItems: ‘center’, flexShrink: 0,
+                    width: 36, height: 36, borderRadius: 10, background: 'var(--surface)',
+                    display: 'grid', placeItems: 'center', flexShrink: 0,
                   }}>
                     <Icon name={x.i} size={16}/>
                   </div>
                   <div style={{ minWidth: 0 }}>
                     <div style={{ fontSize: 13, fontWeight: 500 }}>{x.t}</div>
-                    <div style={{ fontSize: 12, color: ‘var(--ink-3)’, marginTop: 2 }}>{x.s}</div>
+                    <div style={{ fontSize: 12, color: 'var(--ink-3)', marginTop: 2 }}>{x.s}</div>
                   </div>
                 </div>
               ))}
