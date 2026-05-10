@@ -383,6 +383,7 @@ function App() {
       <GoalSheet
         open={sheet?.kind === 'goal'} onClose={() => setSheet(null)}
         goal={goal} onSave={setGoal}
+        latestKg={weights && weights.length > 0 ? weights[weights.length - 1].weight : null}
       />
       <AuthSheet open={showAuth} onClose={() => setShowAuth(false)}/>
       <MigrateSheet
@@ -402,7 +403,7 @@ function App() {
       />
       <ProfileSheet
         open={showProfile} onClose={() => setShowProfile(false)}
-        user={user} goal={goal}
+        user={user} goal={goal} weights={weights}
         onOpenGoal={() => { setShowProfile(false); setSheet({ kind: 'goal' }); }}
         onSignOut={() => { setShowProfile(false); handleSignOut(); }}
         onEditProfile={() => { setShowProfile(false); setShowEditProfile(true); }}

@@ -633,9 +633,23 @@ function AddFoodSheet({ open, onClose, foods, frequent, defaultMeal, onConfirm }
 // ─────────────────────────────────────────────────────────────
 // Goal-setup sheet
 // ─────────────────────────────────────────────────────────────
-function GoalSheet({ open, onClose, goal, onSave }) {
+function GoalSheet({ open, onClose, goal, latestKg, onSave }) {
   const [draft, setDraft] = useState(goal);
-  useEffect(() => { if (open) setDraft(goal); }, [open, goal]);
+  useEffect(() => {
+    if (open) {
+      const base = { ...goal, currentKg: latestKg ?? goal.currentKg };
+      if (base.sex && base.age && base.heightCm && base.activity) {
+        const calc = window.calcGoal({
+          sex: base.sex, age: +base.age, heightCm: +base.heightCm,
+          currentKg: +base.currentKg, targetKg: +base.weightKg,
+          activity: base.activity, mode: base.mode, rate: base.rate,
+        });
+        setDraft({ ...base, kcal: calc.kcal, protein: calc.protein, carbs: calc.carbs, fat: calc.fat });
+      } else {
+        setDraft(base);
+      }
+    }
+  }, [open]);
   if (!open) return null;
 
   const recompute = (next) => {
@@ -740,6 +754,9 @@ function GoalSheet({ open, onClose, goal, onSave }) {
 }
 
 function NumField({ label, value, suffix, onChange }) {
+  const [str, setStr] = useState(value != null ? String(value) : '');
+  const dirty = useRef(false);
+  useEffect(() => { if (!dirty.current) setStr(value != null ? String(value) : ''); }, [value]);
   return (
     <label style={{
       display: 'block', background: 'var(--surface-2)', borderRadius: 14, padding: '10px 14px',
@@ -748,7 +765,20 @@ function NumField({ label, value, suffix, onChange }) {
         {label}
       </div>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
-        <input type="number" value={value} onChange={(e) => onChange(+e.target.value)}
+        <input type="text" inputMode="decimal" value={str}
+               onChange={(e) => {
+                 dirty.current = true;
+                 const s = e.target.value;
+                 setStr(s);
+                 const n = parseFloat(s);
+                 if (Number.isFinite(n) && n > 0) onChange(n);
+               }}
+               onBlur={() => {
+                 dirty.current = false;
+                 const n = parseFloat(str);
+                 if (Number.isFinite(n) && n > 0) { setStr(String(n)); }
+                 else { setStr(value != null ? String(value) : ''); }
+               }}
                style={{
                  background: 'transparent', border: 0, outline: 0, padding: 0,
                  fontFamily: 'var(--serif)', fontSize: 24, letterSpacing: '-0.02em', width: '100%',
@@ -1152,7 +1182,7 @@ function SettingsSheet({ open, onClose, tweaks, setTweak, user, goal, onSignIn, 
 // ─────────────────────────────────────────────────────────────
 // Profile sheet
 // ─────────────────────────────────────────────────────────────
-function ProfileSheet({ open, onClose, user, goal, onOpenGoal, onSignOut, onEditProfile, onReset, onLogWeight }) {
+function ProfileSheet({ open, onClose, user, goal, weights, onOpenGoal, onSignOut, onEditProfile, onReset, onLogWeight }) {
   const [pwMsg, setPwMsg] = useState('');
   const [resetStep, setResetStep] = useState(0); // 0=normal, 1=confirm
   useEffect(() => { if (!open) { setResetStep(0); setPwMsg(''); } }, [open]);
@@ -1213,10 +1243,17 @@ function ProfileSheet({ open, onClose, user, goal, onOpenGoal, onSignOut, onEdit
               display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)',
               gap: 10, marginBottom: 24,
             }}>
-              {[
+              {(() => {
+                const latestKg = weights && weights.length > 0 ? weights[weights.length - 1].weight : goal.currentKg;
+                const firstKg  = weights && weights.length > 0 ? weights[0].weight : goal.startKg;
+                const delta    = +(latestKg - firstKg).toFixed(1);
+                const toGoRaw  = +(latestKg - goal.weightKg).toFixed(1);
+                const gained   = goal.mode === 'gain' ? delta >= 0 : delta < 0;
+                return [
                 { label: 'Streak',  value: `${goal.streak}d` },
-                { label: 'Lost',    value: `${Math.max(0, +(goal.startKg - goal.currentKg).toFixed(1))}kg` },
-                { label: 'To goal', value: `${Math.max(0, +(goal.currentKg - goal.weightKg).toFixed(1))}kg` },
+                { label: gained ? (goal.mode === 'gain' ? 'Gained' : 'Lost') : (goal.mode === 'gain' ? 'To gain' : 'To lose'),
+                  value: weights && weights.length > 1 ? `${Math.abs(delta)}kg` : '—' },
+                { label: 'To goal', value: `${Math.max(0, Math.abs(toGoRaw))}kg` },
               ].map((s) => (
                 <div key={s.label} style={{
                   background: 'var(--surface-2)', borderRadius: 14,
@@ -1228,7 +1265,8 @@ function ProfileSheet({ open, onClose, user, goal, onOpenGoal, onSignOut, onEdit
                     color: 'var(--ink-3)', marginTop: 2,
                   }}>{s.label}</div>
                 </div>
-              ))}
+              ));
+              })()}
             </div>
           )}
 
