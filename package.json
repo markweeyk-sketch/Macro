@@ -1,0 +1,7 @@
+{
+  "name": "macro",
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ]
+}

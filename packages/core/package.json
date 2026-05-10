@@ -1,0 +1,13 @@
+{
+  "name": "@macro/core",
+  "version": "1.0.0",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js",
+    "./firebase": "./firebase.js",
+    "./data": "./data.js"
+  },
+  "dependencies": {
+    "firebase": "^10.12.0"
+  }
+}
