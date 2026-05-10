@@ -466,15 +466,24 @@ function Sidebar({ route, setRoute, goal, totals, user, onSignIn, onSignOut, onO
   return (
     <aside className={`sidebar${collapsed ? ' sidebar-collapsed' : ''}`}>
       <div className="brand" style={{ justifyContent: 'space-between' }}>
-        {!collapsed && <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div className="brand-mark">M</div>
-          <div className="brand-name">M<em>acro</em></div>
-        </div>}
-        {collapsed && <div className="brand-mark" style={{ margin: '0 auto' }}>M</div>}
-        {!collapsed && (
+        {!collapsed && <>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div className="brand-mark">M</div>
+            <div className="brand-name">M<em>acro</em></div>
+          </div>
           <button onClick={onToggle} className="icon-btn" title="Collapse sidebar"
             style={{ width: 28, height: 28, boxShadow: 'none', opacity: 0.4, flexShrink: 0 }}>
             <Icon name="chevron" size={13}/>
+          </button>
+        </>}
+        {collapsed && (
+          <button onClick={onToggle} title="Expand sidebar" style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            width: 40, height: 40, borderRadius: 12,
+            background: 'var(--surface-2)', border: 'none', cursor: 'pointer',
+            color: 'var(--ink)', margin: '0 auto',
+          }}>
+            <div className="brand-mark" style={{ pointerEvents: 'none' }}>M</div>
           </button>
         )}
       </div>
@@ -525,13 +534,6 @@ function Sidebar({ route, setRoute, goal, totals, user, onSignIn, onSignOut, onO
         <span className="ico"><Icon name="settings" size={16}/></span>
         {!collapsed && 'Settings'}
       </button>
-
-      {collapsed && (
-        <button onClick={onToggle} className="nav-item nav-item-icon" title="Expand sidebar"
-          style={{ opacity: 0.4, marginTop: 'auto' }}>
-          <span className="ico"><Icon name="chevron" size={13} style={{ transform: 'rotate(180deg)' }}/></span>
-        </button>
-      )}
 
       {!collapsed && (
         <div className="sidebar-foot" style={{ cursor: 'pointer' }} onClick={onOpenProfile}>

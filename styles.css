@@ -134,8 +134,10 @@ a { color: inherit; text-decoration: none; }
 /* ─────────── Sidebar (desktop) ─────────── */
 .sidebar {
   display: none;
-  position: sticky;
+  position: fixed;
+  left: 0;
   top: 0;
+  width: 232px;
   height: 100dvh;
   padding: 28px 18px;
   border-right: 1px solid var(--line);
@@ -144,11 +146,15 @@ a { color: inherit; text-decoration: none; }
   overflow-y: auto;
   overflow-x: hidden;
   background: var(--bg);
-  transition: padding 280ms cubic-bezier(.4,0,.2,1);
+  z-index: 20;
+  transition: width 280ms cubic-bezier(.4,0,.2,1),
+              padding 280ms cubic-bezier(.4,0,.2,1);
 }
-@media (min-width: 900px) { .sidebar { display: flex; } }
+@media (min-width: 900px)  { .sidebar { display: flex; width: 232px; } }
+@media (min-width: 1280px) { .sidebar { width: 240px; } }
 
 .sidebar.sidebar-collapsed {
+  width: 60px;
   padding: 20px 10px;
   align-items: center;
 }
