@@ -41,7 +41,7 @@ const THEME_KEYS = ['bone','graphite','citrus','marine'];
 const THEME_PALETTES = THEME_KEYS.map((k) => THEMES[k].swatch);
 
 const DEFAULT_GOAL = {
-  mode: 'maintain', kcal: 2000, protein: 150, carbs: 200, fat: 67,
+  mode: 'maintain', rate: 0.5, kcal: 2000, protein: 150, carbs: 200, fat: 67,
   weightKg: 70, startKg: 70, currentKg: 70, streak: 0, stepsGoal: 8000,
   onboarded: false,
 };
@@ -276,7 +276,7 @@ function App() {
         const calc = window.calcGoal({
           sex: g.sex, age: +g.age, heightCm: +g.heightCm,
           currentKg: weight, targetKg: +(g.weightKg || weight),
-          activity: g.activity, mode: g.mode,
+          activity: g.activity, mode: g.mode, rate: g.rate,
         });
         return { ...updated, kcal: calc.kcal, protein: calc.protein, carbs: calc.carbs, fat: calc.fat };
       }
@@ -674,16 +674,11 @@ function TodayPage(props) {
 
       <section className="card padded-md" style={{ padding: 24 }}>
         {tweaks.dashboardLayout === 'rings' && (
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'auto 1fr',
-            gap: 28,
-            alignItems: 'center',
-          }}>
+          <div className="hero-grid">
             <CalorieRing consumed={totals.kcal} goal={goal.kcal} mode={goal.mode} onClick={openGoal}/>
-            <div style={{ minWidth: 0 }}>
+            <div style={{ width: '100%', minWidth: 0 }}>
               <div style={{ marginBottom: 16 }}>
-                <div className="eyebrow">Goal · {goal.mode === 'lose' ? 'Lose 0.5kg/wk' : goal.mode === 'gain' ? 'Gain 0.4kg/wk' : 'Maintain'}</div>
+                <div className="eyebrow">Goal · {goal.mode === 'lose' ? `Lose ${goal.rate || 0.5}kg/wk` : goal.mode === 'gain' ? `Gain ${goal.rate || 0.5}kg/wk` : 'Maintain'}</div>
                 <div className="between">
                   <div className="serif" style={{ fontSize: 22 }}>{goal.kcal} kcal</div>
                   <button onClick={openGoal} style={{ fontSize: 12, color: 'var(--ink-3)', display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -792,11 +787,13 @@ function TodayPage(props) {
             <div className="card-hd">
               <div>
                 <div className="eyebrow">Activity</div>
-                <div className="card-title">{window.MACRO_DATA.STEP_HISTORY.at(-1).toLocaleString()} steps</div>
+                <div className="card-title">Steps</div>
               </div>
-              <div className="chip dot">+{Math.round((window.MACRO_DATA.STEP_HISTORY.at(-1) / goal.stepsGoal) * 100)}%</div>
+              <Icon name="foot" size={20}/>
             </div>
-            <StepBars data={window.MACRO_DATA.STEP_HISTORY} goal={goal.stepsGoal}/>
+            <div style={{ padding: '12px 0', textAlign: 'center', color: 'var(--ink-3)', fontSize: 13, lineHeight: 1.6 }}>
+              No step data yet.<br/>Connect a fitness tracker to see steps.
+            </div>
           </div>
         )}
         {props.tweaks.showStreak && (
@@ -1351,32 +1348,50 @@ function RecipesPage(props) {
 // ─────────────────────────────────────────────────────────────
 function ProgressPage(props) {
   const { goal, weights, onLogWeight } = props;
-  const D = window.MACRO_DATA;
-  const [range, setRange] = useState('30d');
+  const [range, setRange] = useState(‘30d’);
 
-  const weightData = useMemo(() => {
-    if (!weights || weights.length === 0) return null;
+  const displayEntries = useMemo(() => {
+    if (!weights || weights.length === 0) return [];
     const now = new Date();
-    const cutoff = range === '7d'
-      ? new Date(now - 7 * 864e5).toISOString().slice(0, 10)
-      : range === '30d'
-      ? new Date(now - 30 * 864e5).toISOString().slice(0, 10)
-      : '0000-00-00';
-    return weights.filter((e) => e.date >= cutoff).map((e) => e.weight);
+    const day = 86400000;
+    const cutoff = range === ‘7d’  ? new Date(now - 7  * day).toISOString().slice(0, 10)
+                 : range === ‘30d’ ? new Date(now - 30 * day).toISOString().slice(0, 10)
+                 : range === ‘3m’  ? new Date(now - 90 * day).toISOString().slice(0, 10)
+                 : ‘0000-00-00’;
+    return weights.filter((e) => e.date >= cutoff);
   }, [weights, range]);
 
-  const displayData = weightData && weightData.length >= 2 ? weightData : D.WEIGHT_HISTORY;
-  const currentKg = weightData && weightData.length > 0
-    ? weightData[weightData.length - 1]
+  const currentKg = weights && weights.length > 0
+    ? weights[weights.length - 1].weight
     : goal.currentKg;
   const delta = +(goal.startKg - currentKg).toFixed(1);
-  const toGo = +(currentKg - goal.weightKg).toFixed(1);
+  const toGo  = +(currentKg - goal.weightKg).toFixed(1);
+
+  const insights = useMemo(() => {
+    const list = [];
+    if (goal.streak >= 3) {
+      list.push({ i: ‘flame’, t: `${goal.streak}-day streak`, s: ‘Consistent logging builds habits — keep it up.’ });
+    }
+    if (weights && weights.length >= 2) {
+      const first = weights[0].weight;
+      const last  = weights[weights.length - 1].weight;
+      const diff  = +(last - first).toFixed(1);
+      if (diff < 0) list.push({ i: ‘bolt’, t: `Down ${Math.abs(diff)} kg total`, s: `From ${first} kg to ${last} kg. You’re making real progress.` });
+      else if (diff > 0) list.push({ i: ‘bolt’, t: `Up ${diff} kg total`, s: `From ${first} kg to ${last} kg since you started tracking.` });
+    }
+    const left = Math.abs(toGo);
+    if (left > 0 && goal.mode !== ‘maintain’ && goal.rate) {
+      const weeksLeft = Math.ceil(left / goal.rate);
+      list.push({ i: ‘target’, t: `${left} kg to goal`, s: `At ${goal.rate} kg/wk, you could reach your goal in ~${weeksLeft} week${weeksLeft !== 1 ? ‘s’ : ‘’}.` });
+    }
+    return list;
+  }, [goal, weights, toGo]);
 
   return (
     <div className="stack" style={{ paddingTop: 8 }}>
       <header className="page-head">
         <div>
-          <div className="eyebrow">Last 14 days</div>
+          <div className="eyebrow">Your journey</div>
           <h1 className="page-title">Your <em>progress</em></h1>
         </div>
         <button className="btn" onClick={onLogWeight}>
@@ -1385,34 +1400,32 @@ function ProgressPage(props) {
       </header>
 
       <section className="padded grid-2">
-        <div className="card" style={{ gridColumn: '1 / -1' }}>
-          <div className="card-hd">
+        <div className="card" style={{ gridColumn: ‘1 / -1’ }}>
+          <div className="card-hd" style={{ flexWrap: ‘wrap’, gap: 12 }}>
             <div>
               <div className="eyebrow">Weight</div>
-              <div className="row" style={{ alignItems: 'baseline', gap: 10 }}>
+              <div className="row" style={{ alignItems: ‘baseline’, gap: 10, flexWrap: ‘wrap’ }}>
                 <span className="numeric" style={{ fontSize: 44 }}>{currentKg}</span>
-                <span style={{ fontSize: 14, color: 'var(--ink-3)' }}>kg</span>
+                <span style={{ fontSize: 14, color: ‘var(--ink-3)’ }}>kg</span>
                 {delta !== 0 && (
-                  <span className="chip" style={{ background: 'transparent', color: 'var(--accent)', padding: 0 }}>
-                    {delta > 0 ? '↓' : '↑'} {Math.abs(delta)} kg
+                  <span className="chip" style={{ background: ‘transparent’, color: ‘var(--accent)’, padding: 0 }}>
+                    {delta > 0 ? ‘↓’ : ‘↑’} {Math.abs(delta)} kg
                   </span>
                 )}
               </div>
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8 }}>
-              <div style={{ textAlign: 'right' }}>
+            <div style={{ display: ‘flex’, flexDirection: ‘column’, alignItems: ‘flex-end’, gap: 8 }}>
+              <div style={{ textAlign: ‘right’ }}>
                 <div className="eyebrow">To goal</div>
                 <div className="numeric" style={{ fontSize: 22 }}>{toGo} kg</div>
               </div>
-              <div style={{ display: 'flex', gap: 4 }}>
-                {['7d','30d','all'].map((r) => (
-                  <button key={r}
-                    onClick={() => setRange(r)}
-                    className={'chip' + (range === r ? '' : ' ghost')}
+              <div style={{ display: ‘flex’, gap: 4, flexWrap: ‘wrap’, justifyContent: ‘flex-end’ }}>
+                {[‘7d’,’30d’,’3m’,’all’].map((r) => (
+                  <button key={r} onClick={() => setRange(r)} className="chip"
                     style={{
-                      fontSize: 11, cursor: 'pointer',
-                      background: range === r ? 'var(--ink)' : 'var(--surface-2)',
-                      color: range === r ? 'var(--bg)' : 'var(--ink-2)',
+                      fontSize: 11, cursor: ‘pointer’,
+                      background: range === r ? ‘var(--ink)’ : ‘var(--surface-2)’,
+                      color:      range === r ? ‘var(--bg)’  : ‘var(--ink-2)’,
                     }}>
                     {r}
                   </button>
@@ -1420,50 +1433,20 @@ function ProgressPage(props) {
               </div>
             </div>
           </div>
-          <WeightChart data={displayData} goalKg={goal.weightKg} startKg={goal.startKg}/>
-          {(!weights || weights.length === 0) && (
-            <div style={{ fontSize: 12, color: 'var(--ink-3)', marginTop: 8, textAlign: 'center' }}>
-              Log your weight to see your real trend here.
-            </div>
-          )}
+          <WeightChart entries={displayEntries} goalKg={goal.weightKg}/>
         </div>
 
         <div className="card">
-          <div className="eyebrow">Avg calories · 7d</div>
-          <div className="numeric" style={{ fontSize: 36 }}>2,148</div>
-          <div style={{ fontSize: 12, color: 'var(--ink-3)' }}>
-            52 under your daily goal
-          </div>
-          <div style={{
-            display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 6, marginTop: 18, alignItems: 'end', height: 60,
-          }}>
-            {[2200, 1980, 2310, 2050, 2240, 2090, 2160].map((v, i) => (
-              <div key={i} style={{
-                height: ((v - 1800) / 600) * 60,
-                background: 'var(--ink)', borderRadius: 3, opacity: 0.7,
-              }}/>
-            ))}
+          <div className="eyebrow" style={{ marginBottom: 10 }}>Avg calories · 7d</div>
+          <div style={{ padding: ‘16px 0’, textAlign: ‘center’, color: ‘var(--ink-3)’, fontSize: 13, lineHeight: 1.6 }}>
+            No calorie history yet.<br/>Log meals daily to see your trends.
           </div>
         </div>
 
         <div className="card">
-          <div className="eyebrow">Macro adherence · 7d</div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 12 }}>
-            {[
-              { l: 'Protein', v: 92, c: 'var(--p-color)' },
-              { l: 'Carbs',   v: 78, c: 'var(--c-color)' },
-              { l: 'Fat',     v: 84, c: 'var(--f-color)' },
-            ].map((m) => (
-              <div key={m.l}>
-                <div className="between" style={{ marginBottom: 4 }}>
-                  <span style={{ fontSize: 12, color: 'var(--ink-3)' }}>{m.l}</span>
-                  <span style={{ fontSize: 12 }} className="tabular">{m.v}%</span>
-                </div>
-                <div style={{ height: 6, borderRadius: 3, background: 'var(--surface-2)', overflow: 'hidden' }}>
-                  <div style={{ height: '100%', width: `${m.v}%`, background: m.c }}/>
-                </div>
-              </div>
-            ))}
+          <div className="eyebrow" style={{ marginBottom: 10 }}>Macro adherence</div>
+          <div style={{ padding: ‘16px 0’, textAlign: ‘center’, color: ‘var(--ink-3)’, fontSize: 13, lineHeight: 1.6 }}>
+            No macro history yet.<br/>Track meals to see adherence.
           </div>
         </div>
       </section>
@@ -1472,30 +1455,30 @@ function ProgressPage(props) {
         <div className="card">
           <div className="card-hd">
             <div className="card-title">Insights</div>
-            <span className="chip">3 new</span>
+            {insights.length > 0 && <span className="chip">{insights.length}</span>}
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {[
-              { i: 'bolt',  t: 'Protein up 18% this week', s: 'You’re hitting target on 5 of 7 days — best yet.' },
-              { i: 'flame', t: '12-day streak is your second-longest', s: '16 more matches your record from March.' },
-              { i: 'foot',  t: 'Step average climbing', s: 'Up 1,200 from last week. Calorie burn matches +0.2kg/wk loss.' },
-            ].map((x, i) => (
-              <div key={i} className="row" style={{
-                padding: 14, background: 'var(--surface-2)', borderRadius: 14,
-              }}>
-                <div style={{
-                  width: 36, height: 36, borderRadius: 10, background: 'var(--surface)',
-                  display: 'grid', placeItems: 'center',
-                }}>
-                  <Icon name={x.i} size={16}/>
+          {insights.length === 0 ? (
+            <div style={{ padding: ‘16px 0’, textAlign: ‘center’, color: ‘var(--ink-3)’, fontSize: 13, lineHeight: 1.6 }}>
+              Start logging meals and weight<br/>to unlock personal insights.
+            </div>
+          ) : (
+            <div style={{ display: ‘flex’, flexDirection: ‘column’, gap: 10 }}>
+              {insights.map((x, i) => (
+                <div key={i} className="row" style={{ padding: 14, background: ‘var(--surface-2)’, borderRadius: 14 }}>
+                  <div style={{
+                    width: 36, height: 36, borderRadius: 10, background: ‘var(--surface)’,
+                    display: ‘grid’, placeItems: ‘center’, flexShrink: 0,
+                  }}>
+                    <Icon name={x.i} size={16}/>
+                  </div>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: 13, fontWeight: 500 }}>{x.t}</div>
+                    <div style={{ fontSize: 12, color: ‘var(--ink-3)’, marginTop: 2 }}>{x.s}</div>
+                  </div>
                 </div>
-                <div>
-                  <div style={{ fontSize: 13, fontWeight: 500 }}>{x.t}</div>
-                  <div style={{ fontSize: 12, color: 'var(--ink-3)', marginTop: 2 }}>{x.s}</div>
-                </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       </section>
     </div>

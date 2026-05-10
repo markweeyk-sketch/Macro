@@ -151,51 +151,82 @@ function MacroDonut({ totals, goal }) {
 }
 
 // ─────────────────────────────────────────────────────────────
-// Sparkline / weight chart
+// Weight line chart — accepts entries: [{date, weight}]
 // ─────────────────────────────────────────────────────────────
-function WeightChart({ data, goalKg, startKg, height = 140 }) {
+function WeightChart({ entries, goalKg, height = 180 }) {
   const ref = useRef(null);
-  const [w, setW] = useState(600);
+  const [w, setW] = useState(400);
   useEffect(() => {
     if (!ref.current) return;
-    const ro = new ResizeObserver((entries) => {
-      for (const e of entries) setW(e.contentRect.width);
+    const ro = new ResizeObserver((es) => {
+      for (const e of es) setW(e.contentRect.width);
     });
     ro.observe(ref.current);
     return () => ro.disconnect();
   }, []);
-  const padding = { l: 30, r: 16, t: 16, b: 24 };
-  const min = Math.min(...data, goalKg) - 0.5;
-  const max = Math.max(...data, startKg) + 0.5;
-  const sx = (i) => padding.l + (i / (data.length - 1)) * (w - padding.l - padding.r);
-  const sy = (v) => padding.t + (1 - (v - min) / (max - min)) * (height - padding.t - padding.b);
-  const path = data.map((v, i) => `${i === 0 ? 'M' : 'L'} ${sx(i)} ${sy(v)}`).join(' ');
-  const area = `${path} L ${sx(data.length-1)} ${height - padding.b} L ${sx(0)} ${height - padding.b} Z`;
+
+  if (!entries || entries.length < 2) {
+    return (
+      <div ref={ref} style={{
+        height, display: 'flex', alignItems: 'center', justifyContent: 'center',
+        color: 'var(--ink-3)', fontSize: 13, textAlign: 'center', lineHeight: 1.6,
+      }}>
+        Log at least 2 weight entries to see your trend.
+      </div>
+    );
+  }
+
+  const pad = { l: 40, r: 16, t: 16, b: 32 };
+  const vals = entries.map((e) => e.weight);
+  const mn = Math.min(...vals, goalKg) - 0.5;
+  const mx = Math.max(...vals) + 0.5;
+  const n = entries.length;
+  const sx = (i) => pad.l + (i / (n - 1)) * (w - pad.l - pad.r);
+  const sy = (v) => pad.t + (1 - (v - mn) / (mx - mn)) * (height - pad.t - pad.b);
+  const linePath = entries.map((e, i) => `${i === 0 ? 'M' : 'L'}${sx(i).toFixed(1)},${sy(e.weight).toFixed(1)}`).join(' ');
+  const area = `${linePath} L${sx(n-1).toFixed(1)},${(height-pad.b).toFixed(1)} L${sx(0).toFixed(1)},${(height-pad.b).toFixed(1)}Z`;
   const goalY = sy(goalKg);
+  const range = mx - mn;
+  const step = range <= 1 ? 0.25 : range <= 3 ? 0.5 : range <= 8 ? 1 : 2;
+  const yLabels = [];
+  for (let v = Math.ceil(mn / step) * step; v <= mx; v = +(v + step).toFixed(2)) yLabels.push(v);
+  const xIndices = n <= 3 ? entries.map((_, i) => i)
+    : n <= 7 ? [0, Math.floor(n/2), n-1]
+    : [0, Math.floor(n/3), Math.floor(2*n/3), n-1];
+  const fmt = (d) => new Date(d + 'T00:00:00').toLocaleDateString([], { month: 'short', day: 'numeric' });
+
   return (
     <div ref={ref} style={{ width: '100%' }}>
-      <svg width={w} height={height}>
+      <svg width={w} height={height} style={{ overflow: 'visible' }}>
         <defs>
           <linearGradient id="wgrad" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%"  stopColor="var(--ink)" stopOpacity="0.10"/>
+            <stop offset="0%"   stopColor="var(--ink)" stopOpacity="0.10"/>
             <stop offset="100%" stopColor="var(--ink)" stopOpacity="0"/>
           </linearGradient>
         </defs>
-        {/* goal line */}
-        <line x1={padding.l} x2={w - padding.r} y1={goalY} y2={goalY}
-              stroke="var(--accent)" strokeWidth="1" strokeDasharray="3 4" opacity="0.7"/>
-        <text x={w - padding.r} y={goalY - 4} textAnchor="end"
-              fontSize="10" fill="var(--accent)" fontFamily="var(--mono)">
-          GOAL {goalKg}kg
-        </text>
-        {/* area */}
+        {yLabels.map((v) => (
+          <g key={v}>
+            <line x1={pad.l} x2={w - pad.r} y1={sy(v)} y2={sy(v)} stroke="var(--line)" strokeWidth={1}/>
+            <text x={pad.l - 6} y={sy(v) + 4} textAnchor="end" fontSize={10} fill="var(--ink-3)" fontFamily="var(--mono)">{v}</text>
+          </g>
+        ))}
+        {goalKg >= mn && goalKg <= mx && (
+          <g>
+            <line x1={pad.l} x2={w - pad.r} y1={goalY} y2={goalY}
+                  stroke="var(--accent)" strokeWidth={1.5} strokeDasharray="4 4" opacity={0.8}/>
+            <text x={w - pad.r - 2} y={goalY - 5} textAnchor="end" fontSize={10} fill="var(--accent)" fontFamily="var(--mono)">goal</text>
+          </g>
+        )}
         <path d={area} fill="url(#wgrad)"/>
-        <path d={path} fill="none" stroke="var(--ink)" strokeWidth="1.6"
-              strokeLinecap="round" strokeLinejoin="round"/>
-        {/* dots */}
-        {data.map((v, i) => (
-          <circle key={i} cx={sx(i)} cy={sy(v)} r={i === data.length - 1 ? 4 : 0}
-                  fill="var(--ink)" stroke="var(--bg)" strokeWidth="2"/>
+        <path d={linePath} fill="none" stroke="var(--ink)" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"/>
+        {entries.map((e, i) => (
+          <circle key={i} cx={sx(i)} cy={sy(e.weight)} r={i === n-1 ? 4.5 : 2.5}
+                  fill="var(--ink)" stroke="var(--surface)" strokeWidth={2}/>
+        ))}
+        {xIndices.map((i) => (
+          <text key={i} x={sx(i)} y={height - 4} textAnchor="middle" fontSize={10} fill="var(--ink-3)" fontFamily="var(--mono)">
+            {fmt(entries[i].date)}
+          </text>
         ))}
       </svg>
     </div>
@@ -612,11 +643,14 @@ function GoalSheet({ open, onClose, goal, onSave }) {
       const calc = window.calcGoal({
         sex: next.sex, age: +next.age, heightCm: +next.heightCm,
         currentKg: +next.currentKg, targetKg: +next.weightKg,
-        activity: next.activity, mode: next.mode,
+        activity: next.activity, mode: next.mode, rate: next.rate,
       });
       return { ...next, kcal: calc.kcal, protein: calc.protein, carbs: calc.carbs, fat: calc.fat };
     }
-    const kcal = Math.max(1200, next.mode === 'lose' ? 1600 : next.mode === 'gain' ? 2300 : 2000);
+    const r = next.rate || 0.5;
+    const rKcal = Math.round(r * 7700 / 7);
+    const base = 2000 + (next.mode === 'lose' ? -rKcal : next.mode === 'gain' ? rKcal : 0);
+    const kcal = Math.max(1200, base);
     return { ...next, kcal, protein: Math.round(kcal * 0.30 / 4), carbs: Math.round(kcal * 0.40 / 4), fat: Math.round(kcal * 0.30 / 9) };
   };
 
@@ -728,20 +762,22 @@ function NumField({ label, value, suffix, onChange }) {
 // ─────────────────────────────────────────────────────────────
 // Goal calculation (Mifflin-St Jeor + TDEE)
 // ─────────────────────────────────────────────────────────────
-function calcGoal({ sex, age, heightCm, currentKg, targetKg, activity, mode }) {
+function calcGoal({ sex, age, heightCm, currentKg, targetKg, activity, mode, rate }) {
   const bmr = sex === 'male'
     ? 10 * currentKg + 6.25 * heightCm - 5 * age + 5
     : 10 * currentKg + 6.25 * heightCm - 5 * age - 161;
   const multipliers = { sedentary: 1.2, light: 1.375, moderate: 1.55, active: 1.725, 'very-active': 1.9 };
   const tdee = bmr * (multipliers[activity] || 1.55);
-  const offset = mode === 'lose' ? -500 : mode === 'gain' ? 300 : 0;
+  // 1 kg ≈ 7700 kcal; rate in kg/wk → kcal/day deficit or surplus
+  const effectiveRate = (mode !== 'maintain' && rate) ? rate : 0.5;
+  const rateKcal = Math.round(effectiveRate * 7700 / 7);
+  const offset = mode === 'lose' ? -rateKcal : mode === 'gain' ? rateKcal : 0;
   const kcal = Math.max(1200, Math.round(tdee + offset));
-  // 30% protein / 40% carbs / 30% fat
   const protein = Math.round((kcal * 0.30) / 4);
   const carbs   = Math.round((kcal * 0.40) / 4);
   const fat     = Math.round((kcal * 0.30) / 9);
   return {
-    mode, kcal, protein, carbs, fat,
+    mode, rate: effectiveRate, kcal, protein, carbs, fat,
     weightKg: mode === 'maintain' ? currentKg : (targetKg || currentKg),
     startKg: currentKg, currentKg,
     streak: 0, stepsGoal: 8000, onboarded: true,
@@ -760,10 +796,11 @@ function OnboardingSheet({ open, onComplete }) {
   const [targetKg,  setTargetKg]  = useState(70);
   const [activity,  setActivity]  = useState('moderate');
   const [mode,      setMode]      = useState('lose');
+  const [rate,      setRate]      = useState(0.5);
 
   if (!open) return null;
 
-  const calculated = calcGoal({ sex, age: +age, heightCm: +heightCm, currentKg: +currentKg, targetKg: +targetKg, activity, mode });
+  const calculated = calcGoal({ sex, age: +age, heightCm: +heightCm, currentKg: +currentKg, targetKg: +targetKg, activity, mode, rate });
 
   const activityOptions = [
     { v: 'sedentary',   l: 'Sedentary',   s: 'Desk job, little exercise' },
@@ -841,13 +878,13 @@ function OnboardingSheet({ open, onComplete }) {
           </div>
 
           {/* Goal mode */}
-          <div style={{ marginBottom: 20 }}>
+          <div style={{ marginBottom: 16 }}>
             <div className="eyebrow" style={{ marginBottom: 8 }}>Goal</div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
               {[
-                { id: 'lose',     label: 'Lose',     hint: '−0.5 kg/wk' },
+                { id: 'lose',     label: 'Lose',     hint: 'weight' },
                 { id: 'maintain', label: 'Maintain', hint: 'steady' },
-                { id: 'gain',     label: 'Gain',     hint: '+0.3 kg/wk' },
+                { id: 'gain',     label: 'Gain',     hint: 'weight' },
               ].map((m) => (
                 <button key={m.id} onClick={() => setMode(m.id)} style={{
                   padding: '14px 10px', borderRadius: 16, textAlign: 'center',
@@ -861,6 +898,29 @@ function OnboardingSheet({ open, onComplete }) {
               ))}
             </div>
           </div>
+
+          {/* Rate of change — hidden for maintain */}
+          {mode !== 'maintain' && (
+            <div style={{ marginBottom: 20 }}>
+              <div className="eyebrow" style={{ marginBottom: 8 }}>Rate of change</div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
+                {[0.25, 0.5, 0.75, 1.0].map((r) => (
+                  <button key={r} onClick={() => setRate(r)} style={{
+                    padding: '12px 4px', borderRadius: 14, textAlign: 'center',
+                    background: rate === r ? 'var(--ink)' : 'var(--surface-2)',
+                    color:      rate === r ? 'var(--bg)'  : 'var(--ink)',
+                    transition: 'background 100ms',
+                  }}>
+                    <div className="numeric" style={{ fontSize: 16 }}>{r}</div>
+                    <div style={{ fontSize: 10, marginTop: 2, opacity: 0.7 }}>kg/wk</div>
+                  </button>
+                ))}
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--ink-3)', marginTop: 8 }}>
+                ≈ {Math.round(rate * 7700 / 7)} kcal/day {mode === 'lose' ? 'deficit' : 'surplus'}
+              </div>
+            </div>
+          )}
 
           {/* Live calculation preview */}
           <div style={{ background: 'var(--surface-2)', borderRadius: 16, padding: 18 }}>
@@ -1252,6 +1312,7 @@ function EditProfileSheet({ open, onClose, goal, onSave }) {
   const [targetKg,  setTargetKg]  = useState(70);
   const [activity,  setActivity]  = useState('moderate');
   const [mode,      setMode]      = useState('maintain');
+  const [rate,      setRate]      = useState(0.5);
 
   useEffect(() => {
     if (open) {
@@ -1262,6 +1323,7 @@ function EditProfileSheet({ open, onClose, goal, onSave }) {
       setTargetKg(goal.weightKg || 70);
       setActivity(goal.activity || 'moderate');
       setMode(goal.mode || 'maintain');
+      setRate(goal.rate || 0.5);
     }
   }, [open, goal]);
 
@@ -1269,7 +1331,7 @@ function EditProfileSheet({ open, onClose, goal, onSave }) {
 
   const calculated = calcGoal({
     sex, age: +age, heightCm: +heightCm,
-    currentKg: +currentKg, targetKg: +targetKg, activity, mode,
+    currentKg: +currentKg, targetKg: +targetKg, activity, mode, rate,
   });
 
   const activityOptions = [
@@ -1336,13 +1398,13 @@ function EditProfileSheet({ open, onClose, goal, onSave }) {
               ))}
             </div>
           </div>
-          <div style={{ marginBottom: 20 }}>
+          <div style={{ marginBottom: 16 }}>
             <div className="eyebrow" style={{ marginBottom: 8 }}>Goal</div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
               {[
-                { id: 'lose',     label: 'Lose',     hint: '−0.5 kg/wk' },
+                { id: 'lose',     label: 'Lose',     hint: 'weight' },
                 { id: 'maintain', label: 'Maintain', hint: 'steady' },
-                { id: 'gain',     label: 'Gain',     hint: '+0.3 kg/wk' },
+                { id: 'gain',     label: 'Gain',     hint: 'weight' },
               ].map((m) => (
                 <button key={m.id} onClick={() => setMode(m.id)} style={{
                   padding: '14px 10px', borderRadius: 16, textAlign: 'center',
@@ -1356,6 +1418,27 @@ function EditProfileSheet({ open, onClose, goal, onSave }) {
               ))}
             </div>
           </div>
+          {mode !== 'maintain' && (
+            <div style={{ marginBottom: 20 }}>
+              <div className="eyebrow" style={{ marginBottom: 8 }}>Rate of change</div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
+                {[0.25, 0.5, 0.75, 1.0].map((r) => (
+                  <button key={r} onClick={() => setRate(r)} style={{
+                    padding: '12px 4px', borderRadius: 14, textAlign: 'center',
+                    background: rate === r ? 'var(--ink)' : 'var(--surface-2)',
+                    color:      rate === r ? 'var(--bg)'  : 'var(--ink)',
+                    transition: 'background 100ms',
+                  }}>
+                    <div className="numeric" style={{ fontSize: 16 }}>{r}</div>
+                    <div style={{ fontSize: 10, marginTop: 2, opacity: 0.7 }}>kg/wk</div>
+                  </button>
+                ))}
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--ink-3)', marginTop: 8 }}>
+                ≈ {Math.round(rate * 7700 / 7)} kcal/day {mode === 'lose' ? 'deficit' : 'surplus'}
+              </div>
+            </div>
+          )}
           <div style={{ background: 'var(--surface-2)', borderRadius: 16, padding: 18 }}>
             <div className="between" style={{ marginBottom: 14 }}>
               <div>
