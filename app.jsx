@@ -86,6 +86,7 @@ function App() {
   const [showEditProfile, setShowEditProfile] = useState(false);
   const [showLogWeight, setShowLogWeight] = useState(false);
   const [showRail, setShowRail] = useState(true);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const pendingUserRef = useRef(null);
   const syncRef  = useRef(false);
   const userRef  = useRef(null);
@@ -365,11 +366,13 @@ function App() {
   };
 
   return (
-    <div className={`app${showRail ? '' : ' rail-hidden'}`} ref={themeScopeRef}>
+    <div className={`app${showRail ? '' : ' rail-hidden'}${sidebarCollapsed ? ' sidebar-is-collapsed' : ''}`} ref={themeScopeRef}>
       <Sidebar route={route} setRoute={setRoute} goal={goal} totals={totals}
                user={user} onSignIn={() => setShowAuth(true)} onSignOut={handleSignOut}
                onOpenSettings={() => setShowSettings(true)}
-               onOpenProfile={() => setShowProfile(true)}/>
+               onOpenProfile={() => setShowProfile(true)}
+               collapsed={sidebarCollapsed}
+               onToggle={() => setSidebarCollapsed((v) => !v)}/>
       <TopBar setRoute={setRoute} route={route}
               user={user} onSignIn={() => setShowAuth(true)}
               onOpenSettings={() => setShowSettings(true)}/>
@@ -451,7 +454,7 @@ function mealNow() {
 // ─────────────────────────────────────────────────────────────
 // Sidebar (desktop)
 // ─────────────────────────────────────────────────────────────
-function Sidebar({ route, setRoute, goal, totals, user, onSignIn, onSignOut, onOpenSettings, onOpenProfile }) {
+function Sidebar({ route, setRoute, goal, totals, user, onSignIn, onSignOut, onOpenSettings, onOpenProfile, collapsed, onToggle }) {
   const items = [
     { id: 'today',    label: 'Today',     icon: 'home' },
     { id: 'log',      label: 'Food log',  icon: 'book' },
@@ -461,79 +464,102 @@ function Sidebar({ route, setRoute, goal, totals, user, onSignIn, onSignOut, onO
   ];
   const remaining = Math.round(goal.kcal - totals.kcal);
   return (
-    <aside className="sidebar">
-      <div className="brand">
-        <div className="brand-mark">M</div>
-        <div className="brand-name">M<em>acro</em></div>
+    <aside className={`sidebar${collapsed ? ' sidebar-collapsed' : ''}`}>
+      <div className="brand" style={{ justifyContent: 'space-between' }}>
+        {!collapsed && <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div className="brand-mark">M</div>
+          <div className="brand-name">M<em>acro</em></div>
+        </div>}
+        {collapsed && <div className="brand-mark" style={{ margin: '0 auto' }}>M</div>}
+        {!collapsed && (
+          <button onClick={onToggle} className="icon-btn" title="Collapse sidebar"
+            style={{ width: 28, height: 28, boxShadow: 'none', opacity: 0.4, flexShrink: 0 }}>
+            <Icon name="chevron" size={13}/>
+          </button>
+        )}
       </div>
 
-      <div style={{
-        background: 'var(--surface)', borderRadius: 'var(--r-md)',
-        padding: 12, marginBottom: 18, boxShadow: 'var(--shadow-sm)',
-      }}>
-        <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--ink-3)' }}>
-          Today
-        </div>
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginTop: 2 }}>
-          <span className="numeric" style={{ fontSize: 22 }}>{remaining}</span>
-          <span style={{ fontSize: 11, color: 'var(--ink-3)' }}>kcal left</span>
-        </div>
+      {!collapsed && (
         <div style={{
-          height: 4, borderRadius: 2, background: 'var(--surface-2)', marginTop: 8, overflow: 'hidden',
+          background: 'var(--surface)', borderRadius: 'var(--r-md)',
+          padding: 12, marginBottom: 18, boxShadow: 'var(--shadow-sm)',
         }}>
+          <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--ink-3)' }}>
+            Today
+          </div>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginTop: 2 }}>
+            <span className="numeric" style={{ fontSize: 22 }}>{remaining}</span>
+            <span style={{ fontSize: 11, color: 'var(--ink-3)' }}>kcal left</span>
+          </div>
           <div style={{
-            height: '100%',
-            width: `${Math.min(totals.kcal / goal.kcal, 1) * 100}%`,
-            background: 'var(--ink)',
-          }}/>
+            height: 4, borderRadius: 2, background: 'var(--surface-2)', marginTop: 8, overflow: 'hidden',
+          }}>
+            <div style={{
+              height: '100%',
+              width: `${Math.min(totals.kcal / goal.kcal, 1) * 100}%`,
+              background: 'var(--ink)',
+            }}/>
+          </div>
         </div>
-      </div>
+      )}
 
-      <div className="nav-group-label">Tracking</div>
+      {!collapsed && <div className="nav-group-label">Tracking</div>}
       {items.map((it) => (
         <button key={it.id}
-                className={'nav-item' + (route === it.id ? ' active' : '')}
-                onClick={() => setRoute(it.id)}>
+                className={'nav-item' + (route === it.id ? ' active' : '') + (collapsed ? ' nav-item-icon' : '')}
+                onClick={() => setRoute(it.id)}
+                title={collapsed ? it.label : undefined}>
           <span className="ico"><Icon name={it.icon} size={16}/></span>
-          {it.label}
+          {!collapsed && it.label}
         </button>
       ))}
 
-      <div className="nav-group-label">Account</div>
-      <button className="nav-item" onClick={onOpenProfile}>
+      {!collapsed && <div className="nav-group-label">Account</div>}
+      <button className={'nav-item' + (collapsed ? ' nav-item-icon' : '')}
+              onClick={onOpenProfile} title={collapsed ? 'Profile' : undefined}>
         <span className="ico"><Icon name="user" size={16}/></span>
-        Profile
+        {!collapsed && 'Profile'}
       </button>
-      <button className="nav-item" onClick={onOpenSettings}>
+      <button className={'nav-item' + (collapsed ? ' nav-item-icon' : '')}
+              onClick={onOpenSettings} title={collapsed ? 'Settings' : undefined}>
         <span className="ico"><Icon name="settings" size={16}/></span>
-        Settings
+        {!collapsed && 'Settings'}
       </button>
 
-      <div className="sidebar-foot">
-        <div className="avatar">
-          {user
-            ? (user.displayName?.[0] || user.email?.[0] || '?').toUpperCase()
-            : '?'}
-        </div>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 13, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {user ? (user.displayName || user.email) : 'Guest'}
+      {collapsed && (
+        <button onClick={onToggle} className="nav-item nav-item-icon" title="Expand sidebar"
+          style={{ opacity: 0.4, marginTop: 'auto' }}>
+          <span className="ico"><Icon name="chevron" size={13} style={{ transform: 'rotate(180deg)' }}/></span>
+        </button>
+      )}
+
+      {!collapsed && (
+        <div className="sidebar-foot" style={{ cursor: 'pointer' }} onClick={onOpenProfile}>
+          <div className="avatar">
+            {user
+              ? (user.displayName?.[0] || user.email?.[0] || '?').toUpperCase()
+              : '?'}
           </div>
-          <div style={{ fontSize: 11, color: 'var(--ink-3)' }}>
-            {user ? `Pro · Day ${goal.streak}` : 'Not signed in'}
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 13, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {user ? (user.displayName || user.email) : 'Guest'}
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--ink-3)' }}>
+              {user ? `${goal.streak}d streak` : 'Not signed in'}
+            </div>
           </div>
+          {!user && (
+            <button className="btn sm" onClick={(e) => { e.stopPropagation(); onSignIn(); }}>Sign in</button>
+          )}
         </div>
-        {user
-          ? (
-            <button className="icon-btn" onClick={onSignOut} title="Sign out"
-                    style={{ width: 30, height: 30, boxShadow: 'none', flexShrink: 0 }}>
-              <Icon name="arrowR" size={14}/>
-            </button>
-          ) : (
-            <button className="btn sm" onClick={onSignIn}>Sign in</button>
-          )
-        }
-      </div>
+      )}
+
+      {collapsed && (
+        <div className="sidebar-foot" style={{ justifyContent: 'center', cursor: 'pointer' }}
+             onClick={onOpenProfile}>
+          <div className="avatar">{user ? (user.displayName?.[0] || user.email?.[0] || '?').toUpperCase() : '?'}</div>
+        </div>
+      )}
     </aside>
   );
 }
