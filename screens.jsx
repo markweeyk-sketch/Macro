@@ -176,7 +176,7 @@ function WeightChart({ entries, goalKg, height = 180 }) {
     );
   }
 
-  const pad = { l: 40, r: 16, t: 16, b: 32 };
+  const pad = { l: w < 280 ? 28 : 36, r: 12, t: 16, b: 32 };
   const vals = entries.map((e) => e.weight);
   const mn = Math.min(...vals, goalKg) - 0.5;
   const mx = Math.max(...vals) + 0.5;
@@ -196,8 +196,8 @@ function WeightChart({ entries, goalKg, height = 180 }) {
   const fmt = (d) => new Date(d + 'T00:00:00').toLocaleDateString([], { month: 'short', day: 'numeric' });
 
   return (
-    <div ref={ref} style={{ width: '100%' }}>
-      <svg width={w} height={height} style={{ overflow: 'visible' }}>
+    <div ref={ref} style={{ width: '100%', overflow: 'hidden' }}>
+      <svg width={w} height={height} style={{ display: 'block', overflow: 'hidden' }}>
         <defs>
           <linearGradient id="wgrad" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%"   stopColor="var(--ink)" stopOpacity="0.10"/>
@@ -685,9 +685,9 @@ function GoalSheet({ open, onClose, goal, latestKg, onSave }) {
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 22 }}>
             {[
-              { id: 'lose',     label: 'Lose',     hint: '−0.5 kg/wk' },
+              { id: 'lose',     label: 'Lose',     hint: `−${draft.rate || 0.5} kg/wk` },
               { id: 'maintain', label: 'Maintain', hint: 'steady' },
-              { id: 'gain',     label: 'Gain',     hint: '+0.4 kg/wk' },
+              { id: 'gain',     label: 'Gain',     hint: `+${draft.rate || 0.5} kg/wk` },
             ].map((m) => (
               <button key={m.id}
                 onClick={() => setField({ mode: m.id })}

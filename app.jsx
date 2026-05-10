@@ -42,7 +42,7 @@ const THEME_PALETTES = THEME_KEYS.map((k) => THEMES[k].swatch);
 
 const DEFAULT_GOAL = {
   mode: 'maintain', rate: 0.5, kcal: 2000, protein: 150, carbs: 200, fat: 67,
-  weightKg: 70, startKg: 70, currentKg: 70, streak: 0, stepsGoal: 8000,
+  weightKg: 70, startKg: 70, currentKg: 70, streak: 0, lastLogDate: null, stepsGoal: 8000,
   onboarded: false,
 };
 
@@ -85,6 +85,7 @@ function App() {
   const [showProfile, setShowProfile] = useState(false);
   const [showEditProfile, setShowEditProfile] = useState(false);
   const [showLogWeight, setShowLogWeight] = useState(false);
+  const [showRail, setShowRail] = useState(true);
   const pendingUserRef = useRef(null);
   const syncRef  = useRef(false);
   const userRef  = useRef(null);
@@ -340,6 +341,13 @@ function App() {
         time: new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }),
       },
     ]);
+    const today = FB?.todayKey() || new Date().toISOString().slice(0, 10);
+    setGoal((g) => {
+      if (g.lastLogDate === today) return g;
+      const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+      const streak = g.lastLogDate === yesterday ? (g.streak || 0) + 1 : 1;
+      return { ...g, streak, lastLogDate: today };
+    });
   };
   const removeLog = (id) => setLog((cur) => cur.filter((x) => x.id !== id));
 
@@ -357,7 +365,7 @@ function App() {
   };
 
   return (
-    <div className="app" ref={themeScopeRef}>
+    <div className={`app${showRail ? '' : ' rail-hidden'}`} ref={themeScopeRef}>
       <Sidebar route={route} setRoute={setRoute} goal={goal} totals={totals}
                user={user} onSignIn={() => setShowAuth(true)} onSignOut={handleSignOut}
                onOpenSettings={() => setShowSettings(true)}
@@ -372,7 +380,11 @@ function App() {
         {route === 'recipes'  && <RecipesPage {...props}/>}
         {route === 'progress' && <ProgressPage {...props}/>}
       </main>
-      <RightRail {...props} setRoute={setRoute}/>
+      <RightRail {...props} setRoute={setRoute} show={showRail} onToggle={() => setShowRail((v) => !v)}/>
+      <button className="rail-open-btn" onClick={() => setShowRail(true)}>
+        <Icon name="chevron" size={13}/>
+        Quick log
+      </button>
       <BottomNav route={route} setRoute={setRoute} onAdd={() => setSheet({ kind: 'add' })}/>
 
       <AddFoodSheet
@@ -586,11 +598,17 @@ function BottomNav({ route, setRoute, onAdd }) {
 // ─────────────────────────────────────────────────────────────
 // Right rail (desktop ≥1280px)
 // ─────────────────────────────────────────────────────────────
-function RightRail({ goal, totals, log, foods, openAdd, frequent, addFood, setRoute }) {
+function RightRail({ goal, totals, log, foods, openAdd, frequent, addFood, setRoute, show, onToggle }) {
   return (
     <aside className="rail">
-      <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.14em', color: 'var(--ink-3)', marginBottom: 14 }}>
-        Quick log
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+        <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.14em', color: 'var(--ink-3)' }}>
+          Quick log
+        </div>
+        <button onClick={onToggle} className="icon-btn" title="Collapse panel"
+          style={{ opacity: 0.5 }}>
+          <Icon name="chevron" size={14}/>
+        </button>
       </div>
       <div className="search" style={{ marginBottom: 18, boxShadow: 'inset 0 0 0 1px var(--line-2)', background: 'transparent' }}>
         <Icon name="search" size={16}/>
