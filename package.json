@@ -3,5 +3,9 @@
   "private": true,
   "workspaces": [
     "packages/*"
-  ]
+  ],
+  "devDependencies": {
+    "babel-plugin-module-resolver": "^5.0.3",
+    "babel-preset-expo": "^55.0.21"
+  }
 }

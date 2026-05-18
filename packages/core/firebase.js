@@ -8,6 +8,7 @@ import {
   createUserWithEmailAndPassword,
   signOut,
   sendPasswordResetEmail,
+  updateProfile,
 } from 'firebase/auth';
 import {
   getFirestore,
@@ -34,8 +35,6 @@ const db   = getFirestore(app);
 export function todayKey() {
   return new Date().toISOString().slice(0, 10);
 }
-
-import { updateProfile } from 'firebase/auth';
 
 // ─── Auth ────────────────────────────────────────────────────────────────────
 export function signInWithGoogle() {
