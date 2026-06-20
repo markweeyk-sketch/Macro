@@ -34,14 +34,17 @@ config.resolver.extraNodeModules = {
   '@firebase/auth': firebaseAuthDir,
 };
 
-// Firebase JS SDK compatibility (Expo SDK 53+). Metro's package-exports
-// resolution (default-on in SDK 54) resolves Firebase's subpaths through
-// multiple module instances, duplicating its internal @firebase/component
-// registry — so the 'auth' component registers on one instance while getAuth()
-// reads from another, throwing "Component auth has not been registered yet".
-// Disabling package exports + allowing .cjs restores the single-instance
-// resolution Firebase expects. See expo.fyi + firebase-js-sdk#7584.
-config.resolver.unstable_enablePackageExports = false;
+// Firebase JS SDK compatibility (Expo SDK 54). The "Component auth has not been
+// registered yet" crash came from @macro/core/firebase mixing `import` and
+// `require` of the SAME `firebase/auth` specifier, which package-exports
+// resolution split into two umbrella module instances (and two component
+// registries). That is fixed in core by importing the umbrella once and only
+// touching the scoped @firebase/auth (mapped above) for getReactNativePersistence.
+//
+// NOTE: do NOT set `unstable_enablePackageExports = false` here — Expo SDK 54's
+// own entry/runtime modules resolve via package exports, and disabling it breaks
+// app registration ("main" has not been registered). Allowing .cjs is safe and
+// helps firebase's CJS files resolve.
 if (!config.resolver.sourceExts.includes('cjs')) {
   config.resolver.sourceExts.push('cjs');
 }
