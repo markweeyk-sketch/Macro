@@ -9,7 +9,7 @@
     "./theme": "./theme.js"
   },
   "dependencies": {
-    "firebase": "^10.12.0"
+    "firebase": "^11.10.0"
   },
   "peerDependencies": {
     "@react-native-async-storage/async-storage": "*"
