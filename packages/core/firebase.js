@@ -1,14 +1,23 @@
 // @macro/core — Firebase helpers (modular SDK v10, works in React Native + web)
-import { initializeApp, getApps } from 'firebase/app';
+//
+// Imports target the SCOPED @firebase/* packages rather than the `firebase`
+// umbrella. On React Native under Metro this is deliberate: the scoped packages
+// all share the single hoisted @firebase/component instance, so the auth
+// component registers in the same registry getAuth() reads from. Mixing the
+// umbrella with a scoped require split that registry and caused
+// "Component auth has not been registered yet". @firebase/auth's RN build is
+// also the only build that exposes getReactNativePersistence (see initAuth).
+import { initializeApp, getApps } from '@firebase/app';
 import {
   getAuth,
   initializeAuth,
+  getReactNativePersistence,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   signOut,
   sendPasswordResetEmail,
   updateProfile,
-} from 'firebase/auth';
+} from '@firebase/auth';
 import {
   getFirestore,
   doc,
@@ -16,7 +25,7 @@ import {
   setDoc,
   collection,
   getDocs,
-} from 'firebase/firestore';
+} from '@firebase/firestore';
 
 const firebaseConfig = {
   apiKey:            'AIzaSyDiJQgRtfXfE2_QZcEsxAGr_dsf8GHjBJo',
@@ -39,16 +48,12 @@ const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0
 // (and logs a warning). We must initializeAuth() with AsyncStorage-backed
 // persistence. On web we keep plain getAuth().
 //
-// `getReactNativePersistence` is omitted from firebase v10's umbrella
-// `firebase/auth`; it ships only in the scoped @firebase/auth RN build, which
-// metro.config maps for us. `initializeAuth` itself comes from the umbrella
-// (imported above) so all auth + firestore stay on one module instance — the
-// scoped package is touched ONLY for the persistence helper. Requires are lazy
-// so the web bundle never pulls in the RN-only AsyncStorage native module.
+// getReactNativePersistence is imported statically above from @firebase/auth's
+// RN build (the only build exposing it). AsyncStorage is required lazily so the
+// web bundle never pulls in the RN-only native module.
 function initAuth() {
   if (!isReactNative) return getAuth(app);
   try {
-    const { getReactNativePersistence } = require('@firebase/auth');
     const AsyncStorage = require('@react-native-async-storage/async-storage').default;
     if (typeof getReactNativePersistence === 'function') {
       return initializeAuth(app, {
@@ -80,7 +85,7 @@ export function signInWithGoogle() {
       new Error('Google sign-in is not available on this platform yet.')
     );
   }
-  const { signInWithPopup, GoogleAuthProvider } = require('firebase/auth');
+  const { signInWithPopup, GoogleAuthProvider } = require('@firebase/auth');
   return signInWithPopup(auth, new GoogleAuthProvider());
 }
 export function signInWithEmail(email, pw) {

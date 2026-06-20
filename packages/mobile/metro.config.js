@@ -40,34 +40,16 @@ if (!config.resolver.sourceExts.includes('cjs')) {
 
 // Firebase JS SDK compatibility (Expo SDK 54).
 //
-// With Metro package exports ON (the SDK 54 default), firebase v10 resolves its
-// shared singletons (@firebase/component, @firebase/app) through both the ESM
-// and CJS export conditions, producing TWO component registries: the umbrella
-// `firebase/auth` registers the 'auth' component in one, while getAuth()/
-// initializeAuth() read the other → "Component auth has not been registered yet".
-//
-// Turning package exports off *globally* fixes firebase but breaks Expo's own
-// entry/runtime ("main" has not been registered). So disable package exports
-// SURGICALLY — only for firebase/@firebase specifiers — via resolveRequest, and
-// leave every other package on the modern resolver. This forces firebase down
-// its legacy main/browser/react-native fields → single shared instances, and
-// makes @firebase/auth resolve to its dist/rn build (with getReactNativePersistence).
-const isFirebaseModule = (name) =>
-  name === 'firebase' ||
-  name.startsWith('firebase/') ||
-  name.startsWith('@firebase/');
-
-const defaultResolveRequest = config.resolver.resolveRequest;
-config.resolver.resolveRequest = (context, moduleName, platform) => {
-  const resolve = context.resolveRequest || defaultResolveRequest;
-  if (isFirebaseModule(moduleName)) {
-    return resolve(
-      { ...context, unstable_enablePackageExports: false },
-      moduleName,
-      platform
-    );
-  }
-  return resolve(context, moduleName, platform);
-};
+// firebase v10 needs Metro package exports left ON: its umbrella entries have no
+// `react-native` main field, so with exports off they fall back to the browser
+// build and break on device. The earlier "Component auth has not been registered
+// yet" crash came from loading firebase through TWO module instances (umbrella
+// via `import` + scoped @firebase/auth via `require`), which splits the internal
+// @firebase/component registry. @macro/core/firebase now imports the scoped
+// @firebase/* packages consistently instead, so they all share the single
+// hoisted @firebase/component. @firebase/auth is the only one npm nests rather
+// than hoists, so map it here (its RN build is the one exposing
+// getReactNativePersistence). No resolveRequest / package-exports override —
+// those break Expo's own entry resolution ("main" has not been registered).
 
 module.exports = config;
