@@ -2,8 +2,6 @@
 import { initializeApp, getApps } from 'firebase/app';
 import {
   getAuth,
-  signInWithPopup,
-  GoogleAuthProvider,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   signOut,
@@ -28,8 +26,36 @@ const firebaseConfig = {
   appId:             '1:717301516879:web:24cde33709631feb4f783a',
 };
 
-const app  = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
-const auth = getAuth(app);
+// `navigator.product === 'ReactNative'` is the canonical RN runtime probe and is
+// false in every browser, so web bundles never enter the native branch below.
+const isReactNative =
+  typeof navigator !== 'undefined' && navigator.product === 'ReactNative';
+
+const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
+
+// ─── Auth init ─────────────────────────────────────────────────────────────
+// On React Native, getAuth() does NOT persist the session across app restarts
+// (and logs a warning). We must initializeAuth() with AsyncStorage-backed
+// persistence. On web we keep plain getAuth(). Requires are lazy so the web
+// bundle never pulls in the RN-only AsyncStorage native module.
+function initAuth() {
+  if (!isReactNative) return getAuth(app);
+  try {
+    const { initializeAuth, getReactNativePersistence } = require('firebase/auth');
+    const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+    if (typeof getReactNativePersistence === 'function') {
+      return initializeAuth(app, {
+        persistence: getReactNativePersistence(AsyncStorage),
+      });
+    }
+  } catch (e) {
+    // Already-initialized (fast refresh) or RN persistence unavailable —
+    // fall through to getAuth(), which returns the existing instance.
+  }
+  return getAuth(app);
+}
+
+const auth = initAuth();
 const db   = getFirestore(app);
 
 export function todayKey() {
@@ -38,6 +64,15 @@ export function todayKey() {
 
 // ─── Auth ────────────────────────────────────────────────────────────────────
 export function signInWithGoogle() {
+  // Popup auth is web-only. The firebase RN build doesn't even ship
+  // signInWithPopup, so this is wired via lazy require and refused on native.
+  // Mobile v1 ships email/password; Google can arrive later via expo-auth-session.
+  if (isReactNative) {
+    return Promise.reject(
+      new Error('Google sign-in is not available on this platform yet.')
+    );
+  }
+  const { signInWithPopup, GoogleAuthProvider } = require('firebase/auth');
   return signInWithPopup(auth, new GoogleAuthProvider());
 }
 export function signInWithEmail(email, pw) {

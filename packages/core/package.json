@@ -5,9 +5,16 @@
   "exports": {
     ".": "./index.js",
     "./firebase": "./firebase.js",
-    "./data": "./data.js"
+    "./data": "./data.js",
+    "./theme": "./theme.js"
   },
   "dependencies": {
     "firebase": "^10.12.0"
+  },
+  "peerDependencies": {
+    "@react-native-async-storage/async-storage": "*"
+  },
+  "peerDependenciesMeta": {
+    "@react-native-async-storage/async-storage": { "optional": true }
   }
 }
