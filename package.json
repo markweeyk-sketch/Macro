@@ -4,8 +4,8 @@
   "workspaces": [
     "packages/*"
   ],
-  "devDependencies": {
-    "babel-plugin-module-resolver": "^5.0.3",
-    "babel-preset-expo": "^55.0.21"
+  "overrides": {
+    "react": "19.1.0",
+    "react-native": "0.81.5"
   }
 }
