@@ -40,33 +40,24 @@ if (!config.resolver.sourceExts.includes('cjs')) {
 // Firebase JS SDK compatibility (Expo SDK 54) — fixes "Component auth has not
 // been registered yet".
 //
-// firebase's component registry lives in @firebase/app (+ @firebase/component).
-// Under Metro package exports, those shared singletons get loaded as BOTH an ESM
-// and a CJS module instance (different firebase sub-builds import them via
-// `import` vs `require`), producing two registries: 'auth' registers in one,
-// getAuth() reads the other. firebase v10/v11 both ship this way
-// (firebase-js-sdk#7584).
+// firebase's component registry lives in @firebase/component (+ @firebase/app).
+// Its `exports` map only offers { require: <cjs>, default: <esm> } with NO
+// react-native condition, so under Metro package exports it loads as the CJS
+// build for require() callers and the ESM build for import callers — two module
+// instances, two registries: 'auth' registers in one, getAuth() reads the other
+// (firebase-js-sdk#7584; firebase v10 and v11 both ship this way).
 //
-// Pin ONLY those two registry-critical singletons to their single CJS build so
-// every firebase sub-package shares one instance. We deliberately do NOT disable
-// package exports (that drops firebase to its browser build, breaking on device)
-// and do NOT touch any non-firebase module (so Expo's own entry still resolves).
-// @firebase/util is left alone — its CJS main is a Node-specific build unsafe on RN.
-const PINNED_FIREBASE_CJS = {};
-for (const name of ['@firebase/app', '@firebase/component']) {
-  const pkgPath = require.resolve(`${name}/package.json`, {
-    paths: [projectRoot, monorepoRoot],
-  });
-  PINNED_FIREBASE_CJS[name] = path.resolve(path.dirname(pkgPath), require(pkgPath).main);
-}
-
-const defaultResolveRequest = config.resolver.resolveRequest;
-config.resolver.resolveRequest = (context, moduleName, platform) => {
-  if (Object.prototype.hasOwnProperty.call(PINNED_FIREBASE_CJS, moduleName)) {
-    return { type: 'sourceFile', filePath: PINNED_FIREBASE_CJS[moduleName] };
-  }
-  const resolve = defaultResolveRequest ?? context.resolveRequest;
-  return resolve(context, moduleName, platform);
-};
+// Adding "require" to the resolver condition set makes any package whose exports
+// list `require` before `default` resolve to its CJS build for BOTH import and
+// require callers, collapsing @firebase/component to a single instance. Packages
+// that expose a react-native condition (e.g. @firebase/auth -> dist/rn, which is
+// where getReactNativePersistence lives) still win on react-native, which Expo
+// already injects for ios/android. This is a resolver *condition* (not a
+// resolveRequest override, which clobbers Expo's own entry resolution and breaks
+// app registration).
+config.resolver.unstable_conditionNames = [
+  ...(config.resolver.unstable_conditionNames ?? []),
+  'require',
+];
 
 module.exports = config;
