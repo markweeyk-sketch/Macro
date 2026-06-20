@@ -2,6 +2,7 @@
 import { initializeApp, getApps } from 'firebase/app';
 import {
   getAuth,
+  initializeAuth,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   signOut,
@@ -36,12 +37,18 @@ const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0
 // ─── Auth init ─────────────────────────────────────────────────────────────
 // On React Native, getAuth() does NOT persist the session across app restarts
 // (and logs a warning). We must initializeAuth() with AsyncStorage-backed
-// persistence. On web we keep plain getAuth(). Requires are lazy so the web
-// bundle never pulls in the RN-only AsyncStorage native module.
+// persistence. On web we keep plain getAuth().
+//
+// `getReactNativePersistence` is omitted from firebase v10's umbrella
+// `firebase/auth`; it ships only in the scoped @firebase/auth RN build, which
+// metro.config maps for us. `initializeAuth` itself comes from the umbrella
+// (imported above) so all auth + firestore stay on one module instance — the
+// scoped package is touched ONLY for the persistence helper. Requires are lazy
+// so the web bundle never pulls in the RN-only AsyncStorage native module.
 function initAuth() {
   if (!isReactNative) return getAuth(app);
   try {
-    const { initializeAuth, getReactNativePersistence } = require('firebase/auth');
+    const { getReactNativePersistence } = require('@firebase/auth');
     const AsyncStorage = require('@react-native-async-storage/async-storage').default;
     if (typeof getReactNativePersistence === 'function') {
       return initializeAuth(app, {
@@ -51,6 +58,7 @@ function initAuth() {
   } catch (e) {
     // Already-initialized (fast refresh) or RN persistence unavailable —
     // fall through to getAuth(), which returns the existing instance.
+    console.warn('[macro/core] RN auth persistence unavailable:', e?.message);
   }
   return getAuth(app);
 }
