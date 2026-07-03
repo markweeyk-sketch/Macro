@@ -16,7 +16,11 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { signInWithEmail, signUpWithEmail } from '@macro/core/firebase';
+import {
+  signInWithEmail,
+  signUpWithEmail,
+  sendPasswordReset,
+} from '@macro/core/firebase';
 import { colors, radii, spacing, fontSizes } from '@macro/core/theme';
 
 function formatError(msg = '') {
@@ -52,17 +56,40 @@ export default function AuthScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState(false);
 
   const isSignup = mode === 'signup';
 
   const submit = async () => {
     setError('');
+    setNotice('');
     setBusy(true);
     try {
       if (isSignup) await signUpWithEmail(email.trim(), password, name.trim());
       else await signInWithEmail(email.trim(), password);
       // On success the auth listener in App.js swaps to the app; nothing to do.
+    } catch (e) {
+      setError(formatError(e?.message || String(e)));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const forgotPassword = async () => {
+    setError('');
+    setNotice('');
+    const addr = email.trim();
+    if (!addr) {
+      setError('Enter your email above, then tap “Forgot password”.');
+      return;
+    }
+    setBusy(true);
+    try {
+      await sendPasswordReset(addr);
+      // Firebase returns void whether or not the address has an account, so we
+      // don't reveal account existence — just confirm the email was sent.
+      setNotice(`If an account exists for ${addr}, a reset link is on its way.`);
     } catch (e) {
       setError(formatError(e?.message || String(e)));
     } finally {
@@ -116,9 +143,26 @@ export default function AuthScreen() {
             />
           </View>
 
+          {!isSignup && (
+            <Pressable
+              style={styles.forgot}
+              onPress={forgotPassword}
+              disabled={busy}
+              hitSlop={8}
+            >
+              <Text style={styles.forgotText}>Forgot password?</Text>
+            </Pressable>
+          )}
+
           {!!error && (
             <View style={styles.errorBox}>
               <Text style={styles.errorText}>{error}</Text>
+            </View>
+          )}
+
+          {!!notice && (
+            <View style={styles.noticeBox}>
+              <Text style={styles.noticeText}>{notice}</Text>
             </View>
           )}
 
@@ -141,6 +185,7 @@ export default function AuthScreen() {
             onPress={() => {
               setMode(isSignup ? 'signin' : 'signup');
               setError('');
+              setNotice('');
             }}
           >
             <Text style={styles.toggleText}>
@@ -187,6 +232,8 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   input: { fontSize: fontSizes.base, color: colors.ink, padding: 0 },
+  forgot: { marginTop: spacing.md, alignSelf: 'flex-end', paddingVertical: 4 },
+  forgotText: { color: colors.ink3, fontSize: fontSizes.body },
   errorBox: {
     marginTop: spacing.lg,
     paddingVertical: 10,
@@ -195,6 +242,14 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(198,106,58,0.1)',
   },
   errorText: { color: colors.warn, fontSize: fontSizes.body },
+  noticeBox: {
+    marginTop: spacing.lg,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: radii.sm,
+    backgroundColor: 'rgba(92,122,62,0.12)',
+  },
+  noticeText: { color: colors.accent, fontSize: fontSizes.body },
   btn: {
     marginTop: spacing['2xl'],
     backgroundColor: colors.ink,
