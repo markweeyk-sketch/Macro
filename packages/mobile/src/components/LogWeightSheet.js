@@ -5,12 +5,11 @@
 import React, { useEffect, useState } from 'react';
 import {
   View,
-  Text,
   Pressable,
-  TextInput,
   StyleSheet,
 } from 'react-native';
-import { colors, radii, spacing, fontSizes } from '@macro/core/theme';
+import { Text, TextInput } from '../ui/type';
+import { colors, radii, spacing, fontSizes, fonts } from '@macro/core/theme';
 import Sheet from './Sheet';
 import Icon from './Icon';
 
@@ -120,7 +119,7 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     paddingHorizontal: 20,
     fontSize: 44,
-    fontWeight: '600',
+    fontFamily: fonts.serifMedium,
     color: colors.ink,
     letterSpacing: -1,
   },

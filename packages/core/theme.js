@@ -129,12 +129,21 @@ export const fontWeights = {
   semibold: '600',
 };
 
-// Font families. On web these resolve to the loaded webfonts; on RN they fall
-// back to the system font unless the fonts are bundled via expo-font later.
+// Font families. The web app resolves fonts via CSS (styles.css :root), so it
+// does NOT import these — these values are React-Native family names, matching
+// the faces bundled via expo-font in the mobile app (see packages/mobile/src/ui
+// /fonts.js). Web uses Fraunces (serif / .numeric), Inter (body), JetBrains Mono
+// (chart axes); these mirror that. RN ignores fontWeight on a named family, so a
+// weight per family name is exposed and applied by the mobile <Text> wrapper.
 export const fonts = {
-  serif: "'Fraunces', Georgia, serif",
-  sans:  "'Inter', system-ui, sans-serif",
-  mono:  "'JetBrains Mono', ui-monospace, monospace",
+  sans:          'Inter_400Regular',
+  sansMedium:    'Inter_500Medium',
+  sansSemibold:  'Inter_600SemiBold',
+  serif:         'Fraunces_400Regular',
+  serifMedium:   'Fraunces_500Medium',
+  serifItalic:   'Fraunces_400Regular_Italic',
+  serifMediumItalic: 'Fraunces_500Medium_Italic',
+  mono:          'JetBrainsMono_400Regular',
 };
 
 export default {

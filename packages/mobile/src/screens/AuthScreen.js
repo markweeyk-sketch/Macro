@@ -6,8 +6,6 @@
 import React, { useState } from 'react';
 import {
   View,
-  Text,
-  TextInput,
   Pressable,
   StyleSheet,
   KeyboardAvoidingView,
@@ -15,6 +13,7 @@ import {
   ScrollView,
   ActivityIndicator,
 } from 'react-native';
+import { Text, TextInput } from '../ui/type';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   signInWithEmail,

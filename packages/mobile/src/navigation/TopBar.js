@@ -4,9 +4,10 @@
 // bottom bar doesn't show (Profile, Log) the right button becomes a close
 // that returns to Today.
 import React from 'react';
-import { View, Text, Pressable, StyleSheet, Platform } from 'react-native';
+import { View, Pressable, StyleSheet, Platform } from 'react-native';
+import { Text } from '../ui/type';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { colors, spacing, fontSizes } from '@macro/core/theme';
+import { colors, spacing, fontSizes, fonts } from '@macro/core/theme';
 import Icon from '../components/Icon';
 
 // Mirrors the web TopBar `titles` map.
@@ -19,7 +20,7 @@ const TITLES = {
   Profile:  'Profile',
 };
 
-const serif = Platform.select({ ios: 'Georgia', default: 'serif' });
+const serif = fonts.serif;
 
 export default function TopBar({ route, navigation }) {
   const insets = useSafeAreaInsets();
@@ -72,8 +73,7 @@ const styles = StyleSheet.create({
   },
   brandLetter: {
     color: colors.bg,
-    fontFamily: serif,
-    fontStyle: 'italic',
+    fontFamily: fonts.serifItalic,
     fontSize: 15,
     lineHeight: 18,
   },

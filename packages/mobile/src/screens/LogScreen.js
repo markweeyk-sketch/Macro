@@ -10,14 +10,14 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   View,
-  Text,
   ScrollView,
   Pressable,
   ActivityIndicator,
   StyleSheet,
 } from 'react-native';
+import { Text } from '../ui/type';
 import { auth, todayKey, loadDayLog } from '@macro/core/firebase';
-import { colors, radii, spacing, fontSizes } from '@macro/core/theme';
+import { colors, radii, spacing, fontSizes, fonts } from '@macro/core/theme';
 import { useMacroData, computeTotals } from '../state/MacroData';
 import MacroBars from '../components/charts/MacroBars';
 import MealSection from '../components/MealSection';
@@ -183,7 +183,7 @@ const styles = StyleSheet.create({
   },
   arrowOff: { opacity: 0.4 },
   flip: { transform: [{ scaleX: -1 }] },
-  dayLabel: { fontSize: fontSizes.title, fontWeight: '600', color: colors.ink },
+  dayLabel: { fontSize: fontSizes.title, fontFamily: fonts.serifMedium, color: colors.ink },
   card: {
     backgroundColor: colors.surface,
     borderRadius: radii.lg,
@@ -203,9 +203,9 @@ const styles = StyleSheet.create({
     letterSpacing: 1.4,
     color: colors.ink3,
   },
-  kcalNum: { fontSize: 40, fontWeight: '600', color: colors.ink, marginTop: 4 },
+  kcalNum: { fontSize: 40, fontFamily: fonts.serifMedium, color: colors.ink, marginTop: 4 },
   kcalGoal: { fontSize: 16, fontWeight: '400', color: colors.ink3 },
-  remainNum: { fontSize: 28, fontWeight: '600', color: colors.ink, marginTop: 4 },
+  remainNum: { fontSize: 28, fontFamily: fonts.serifMedium, color: colors.ink, marginTop: 4 },
   macroWrap: { marginTop: 18 },
   loading: { marginTop: 40 },
   meals: { marginTop: spacing.sm },

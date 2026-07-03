@@ -5,7 +5,8 @@
 // The web version measures its width with a ResizeObserver; RN has no such API,
 // so we capture the width from onLayout and only draw once we have it.
 import React, { useState } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, StyleSheet } from 'react-native';
+import { Text } from '../../ui/type';
 import Svg, {
   Path,
   Line,
@@ -15,7 +16,7 @@ import Svg, {
   LinearGradient,
   Stop,
 } from 'react-native-svg';
-import { colors, fontSizes } from '@macro/core/theme';
+import { colors, fontSizes, fonts } from '@macro/core/theme';
 
 export default function WeightChart({ entries, goalKg, height = 180 }) {
   const [w, setW] = useState(0);
@@ -77,7 +78,7 @@ function Chart({ entries, goalKg, height, w }) {
       {yLabels.map((v) => (
         <React.Fragment key={v}>
           <Line x1={pad.l} x2={w - pad.r} y1={sy(v)} y2={sy(v)} stroke={colors.line} strokeWidth={1} />
-          <SvgText x={pad.l - 6} y={sy(v) + 4} textAnchor="end" fontSize={10} fill={colors.ink3}>
+          <SvgText x={pad.l - 6} y={sy(v) + 4} textAnchor="end" fontSize={10} fill={colors.ink3} fontFamily={fonts.mono}>
             {v}
           </SvgText>
         </React.Fragment>
@@ -94,7 +95,7 @@ function Chart({ entries, goalKg, height, w }) {
             strokeDasharray="4 4"
             opacity={0.8}
           />
-          <SvgText x={w - pad.r - 2} y={goalY - 5} textAnchor="end" fontSize={10} fill={colors.accent}>
+          <SvgText x={w - pad.r - 2} y={goalY - 5} textAnchor="end" fontSize={10} fill={colors.accent} fontFamily={fonts.mono}>
             goal
           </SvgText>
         </>
@@ -127,6 +128,7 @@ function Chart({ entries, goalKg, height, w }) {
           textAnchor="middle"
           fontSize={10}
           fill={colors.ink3}
+          fontFamily={fonts.mono}
         >
           {fmt(entries[i].date)}
         </SvgText>

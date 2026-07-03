@@ -9,14 +9,13 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   View,
-  Text,
-  TextInput,
   Pressable,
   ScrollView,
   StyleSheet,
 } from 'react-native';
+import { Text, TextInput } from '../ui/type';
 import { nutritionFor } from '@macro/core/data';
-import { colors, radii, spacing, fontSizes } from '@macro/core/theme';
+import { colors, radii, spacing, fontSizes, fonts } from '@macro/core/theme';
 import Sheet from './Sheet';
 import Icon from './Icon';
 import { useMacroData } from '../state/MacroData';
@@ -309,7 +308,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   pickedEmoji: { fontSize: 32 },
-  pickedName: { fontSize: 22, fontWeight: '600', color: colors.ink },
+  pickedName: { fontSize: 22, fontFamily: fonts.serifMedium, color: colors.ink },
   pickedMeta: { fontSize: 13, color: colors.ink3, marginTop: 2 },
 
   amountBox: {
@@ -338,7 +337,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 10,
     fontSize: 22,
-    fontWeight: '600',
+    fontFamily: fonts.serifMedium,
     color: colors.ink,
   },
 
@@ -350,7 +349,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     alignItems: 'center',
   },
-  macroValue: { fontSize: 22, fontWeight: '600' },
+  macroValue: { fontSize: 22, fontFamily: fonts.serifMedium },
   macroLabel: {
     fontSize: 11,
     textTransform: 'uppercase',

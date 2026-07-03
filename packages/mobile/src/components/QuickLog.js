@@ -2,7 +2,8 @@
 // horizontally scrolling row of frequent foods; tapping one logs its default
 // serving straight away.
 import React from 'react';
-import { ScrollView, Pressable, View, Text, StyleSheet } from 'react-native';
+import { ScrollView, Pressable, View, StyleSheet } from 'react-native';
+import { Text } from '../ui/type';
 import { nutritionFor } from '@macro/core/data';
 import { colors, radii } from '@macro/core/theme';
 

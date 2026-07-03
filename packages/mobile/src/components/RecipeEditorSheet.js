@@ -6,14 +6,13 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   View,
-  Text,
-  TextInput,
   Pressable,
   ScrollView,
   StyleSheet,
 } from 'react-native';
+import { Text, TextInput } from '../ui/type';
 import { nutritionFor } from '@macro/core/data';
-import { colors, radii, spacing, fontSizes } from '@macro/core/theme';
+import { colors, radii, spacing, fontSizes, fonts } from '@macro/core/theme';
 import Sheet from './Sheet';
 import Icon from './Icon';
 
@@ -380,6 +379,7 @@ const styles = StyleSheet.create({
     paddingVertical: 13,
     paddingHorizontal: 12,
     fontSize: 18,
+    fontFamily: fonts.serifMedium,
     color: colors.ink,
   },
   emojiWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 18 },
@@ -419,7 +419,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     alignItems: 'center',
   },
-  tileVal: { fontSize: 18, fontWeight: '600' },
+  tileVal: { fontSize: 18, fontFamily: fonts.serifMedium },
   tileValBig: { fontSize: 22 },
   tileLabel: {
     fontSize: 10,
@@ -473,7 +473,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   addingEmoji: { fontSize: 26 },
-  addingName: { fontSize: 18, fontWeight: '600', color: colors.ink },
+  addingName: { fontSize: 18, fontFamily: fonts.serifMedium, color: colors.ink },
   chipWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 12 },
   chip: { paddingVertical: 7, paddingHorizontal: 14, borderRadius: radii.pill },
   chipOn: { backgroundColor: colors.ink },
@@ -500,7 +500,7 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     paddingHorizontal: 8,
     fontSize: 20,
-    fontWeight: '600',
+    fontFamily: fonts.serifMedium,
     color: colors.ink,
   },
   addBtnRow: { flexDirection: 'row', gap: 8 },

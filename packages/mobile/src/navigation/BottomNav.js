@@ -9,7 +9,8 @@
 // would be redundant next to Today's quick-log and the add FAB, so its slot
 // goes to Recipes (icon per the web sidebar).
 import React from 'react';
-import { View, Text, Pressable, StyleSheet, Platform } from 'react-native';
+import { View, Pressable, StyleSheet, Platform } from 'react-native';
+import { Text } from '../ui/type';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, spacing, fontWeights } from '@macro/core/theme';
 import Icon from '../components/Icon';

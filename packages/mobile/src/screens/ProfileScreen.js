@@ -8,9 +8,10 @@
 // multi-step OnboardingSheet is deferred — the editor here does first-run goal
 // setup (a default goal works until then).
 import React, { useState } from 'react';
-import { View, Text, ScrollView, Pressable, StyleSheet } from 'react-native';
+import { View, ScrollView, Pressable, StyleSheet } from 'react-native';
+import { Text } from '../ui/type';
 import { auth, signOutUser } from '@macro/core/firebase';
-import { colors, radii, spacing, fontSizes } from '@macro/core/theme';
+import { colors, radii, spacing, fontSizes, fonts } from '@macro/core/theme';
 import { useMacroData } from '../state/MacroData';
 import Sheet from '../components/Sheet';
 import EditProfileSheet from '../components/EditProfileSheet';
@@ -191,7 +192,7 @@ const styles = StyleSheet.create({
     color: colors.ink3,
   },
   estimate: { fontSize: 11, color: colors.warn },
-  kcal: { fontSize: 40, fontWeight: '600', color: colors.ink, marginTop: 6 },
+  kcal: { fontSize: 40, fontFamily: fonts.serifMedium, color: colors.ink, marginTop: 6 },
   kcalUnit: { fontSize: 16, fontWeight: '400', color: colors.ink3 },
   macroRow: { flexDirection: 'row', gap: 10, marginTop: 16 },
   macroTile: {
@@ -210,7 +211,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   weightRow: { flexDirection: 'row', alignItems: 'center', gap: 16, marginTop: 12 },
-  weightNum: { fontSize: 28, fontWeight: '600', color: colors.ink },
+  weightNum: { fontSize: 28, fontFamily: fonts.serifMedium, color: colors.ink },
   weightCap: {
     fontSize: 10,
     textTransform: 'uppercase',

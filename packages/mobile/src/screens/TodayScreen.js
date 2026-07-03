@@ -4,9 +4,10 @@
 // MacroData context (Firestore-backed, AsyncStorage-cached). Tapping the date
 // opens the full day log (Log is a hidden route, not a tab).
 import React from 'react';
-import { View, Text, ScrollView, Pressable, StyleSheet } from 'react-native';
+import { View, ScrollView, Pressable, StyleSheet } from 'react-native';
+import { Text } from '../ui/type';
 import { auth } from '@macro/core/firebase';
-import { colors, radii, spacing, fontSizes } from '@macro/core/theme';
+import { colors, radii, spacing, fontSizes, fonts } from '@macro/core/theme';
 import { useMacroData, mealNow } from '../state/MacroData';
 import CalorieRing from '../components/charts/CalorieRing';
 import MacroBars from '../components/charts/MacroBars';
@@ -109,12 +110,12 @@ const styles = StyleSheet.create({
   },
   greeting: {
     fontSize: fontSizes.display,
-    fontWeight: '600',
+    fontFamily: fonts.serifMedium,
     color: colors.ink,
     marginTop: 6,
     marginBottom: spacing.xl,
   },
-  greetingEm: { fontStyle: 'italic' },
+  greetingEm: { fontFamily: fonts.serifItalic },
   card: {
     backgroundColor: colors.surface,
     borderRadius: radii.lg,

@@ -2,7 +2,8 @@
 // horizontal progress bars (protein / carbs / fat) coloured from the shared
 // theme, each capped at 100% fill with "current / goal g" on the right.
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, StyleSheet } from 'react-native';
+import { Text } from '../../ui/type';
 import { colors } from '@macro/core/theme';
 
 export default function MacroBars({ totals, goal }) {

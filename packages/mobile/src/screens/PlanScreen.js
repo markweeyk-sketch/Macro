@@ -7,9 +7,10 @@
 // updatePlan (cache + Firestore savePlan). Recipes are created on the Recipes
 // screen (Phase 4) — until then the picker shows the "no recipes" empty state.
 import React, { useMemo, useState } from 'react';
-import { View, Text, ScrollView, Pressable, StyleSheet } from 'react-native';
+import { View, ScrollView, Pressable, StyleSheet } from 'react-native';
+import { Text } from '../ui/type';
 import { nutritionFor } from '@macro/core/data';
-import { colors, radii, spacing, fontSizes } from '@macro/core/theme';
+import { colors, radii, spacing, fontSizes, fonts } from '@macro/core/theme';
 import { useMacroData, getRecipeItems } from '../state/MacroData';
 import Sheet from '../components/Sheet';
 import Icon from '../components/Icon';
@@ -249,8 +250,8 @@ const styles = StyleSheet.create({
     letterSpacing: 1.4,
     color: colors.ink3,
   },
-  title: { fontSize: 28, fontWeight: '600', color: colors.ink, marginTop: 2 },
-  titleEm: { fontStyle: 'italic' },
+  title: { fontSize: 28, fontFamily: fonts.serifMedium, color: colors.ink, marginTop: 2 },
+  titleEm: { fontFamily: fonts.serifItalic },
   autoBtn: {
     flexDirection: 'row',
     alignItems: 'center',

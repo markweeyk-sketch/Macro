@@ -3,9 +3,10 @@
 // starts at 12 o'clock (rotated -90°, like the web CSS) and turns warn-colored
 // when a "lose" goal is exceeded.
 import React from 'react';
-import { View, Text, Pressable, StyleSheet } from 'react-native';
+import { View, Pressable, StyleSheet } from 'react-native';
+import { Text } from '../../ui/type';
 import Svg, { Circle, G } from 'react-native-svg';
-import { colors } from '@macro/core/theme';
+import { colors, fonts } from '@macro/core/theme';
 
 export default function CalorieRing({
   consumed,
@@ -71,7 +72,7 @@ const styles = StyleSheet.create({
   big: {
     fontSize: 56,
     lineHeight: 60,
-    fontWeight: '600',
+    fontFamily: fonts.serifMedium,
     color: colors.ink,
     marginTop: 4,
   },

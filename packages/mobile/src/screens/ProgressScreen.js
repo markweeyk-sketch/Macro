@@ -3,8 +3,9 @@
 // range-filtered WeightChart), placeholder trend cards, and computed insights.
 // "Log weight" opens the LogWeightSheet, which writes through MacroData.logWeight.
 import React, { useMemo, useState } from 'react';
-import { View, Text, ScrollView, Pressable, StyleSheet } from 'react-native';
-import { colors, radii, spacing, fontSizes } from '@macro/core/theme';
+import { View, ScrollView, Pressable, StyleSheet } from 'react-native';
+import { Text } from '../ui/type';
+import { colors, radii, spacing, fontSizes, fonts } from '@macro/core/theme';
 import { useMacroData } from '../state/MacroData';
 import WeightChart from '../components/charts/WeightChart';
 import LogWeightSheet from '../components/LogWeightSheet';
@@ -217,8 +218,8 @@ const styles = StyleSheet.create({
     color: colors.ink3,
     marginBottom: spacing.sm,
   },
-  title: { fontSize: 28, fontWeight: '600', color: colors.ink, marginTop: 2 },
-  titleEm: { fontStyle: 'italic', color: colors.ink },
+  title: { fontSize: 28, fontFamily: fonts.serifMedium, color: colors.ink, marginTop: 2 },
+  titleEm: { fontFamily: fonts.serifItalic, color: colors.ink },
   logBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -248,12 +249,12 @@ const styles = StyleSheet.create({
   },
   flexShrink: { flexShrink: 1 },
   weightRow: { flexDirection: 'row', alignItems: 'baseline', gap: 8, flexWrap: 'wrap', marginTop: 2 },
-  weightNum: { fontSize: 44, fontWeight: '600', color: colors.ink },
+  weightNum: { fontSize: 44, fontFamily: fonts.serifMedium, color: colors.ink },
   weightUnit: { fontSize: 14, color: colors.ink3 },
   weightChip: { fontSize: 13, color: colors.accent },
   headRight: { alignItems: 'flex-end', gap: 8 },
   toGoWrap: { alignItems: 'flex-end' },
-  toGoNum: { fontSize: 22, fontWeight: '600', color: colors.ink, marginTop: 2 },
+  toGoNum: { fontSize: 22, fontFamily: fonts.serifMedium, color: colors.ink, marginTop: 2 },
   rangeRow: { flexDirection: 'row', gap: 4, flexWrap: 'wrap', justifyContent: 'flex-end' },
   rangeChip: {
     paddingHorizontal: 10,

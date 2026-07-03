@@ -2,9 +2,10 @@
 // meal's heading + running kcal total, its logged food rows (tap the minus to
 // remove), and an add affordance. Empty meals show an "Add to <meal>" prompt.
 import React from 'react';
-import { View, Text, Pressable, StyleSheet } from 'react-native';
+import { View, Pressable, StyleSheet } from 'react-native';
+import { Text } from '../ui/type';
 import { nutritionFor } from '@macro/core/data';
-import { colors, fontSizes } from '@macro/core/theme';
+import { colors, fontSizes, fonts } from '@macro/core/theme';
 import Icon from './Icon';
 
 export default function MealSection({ meal, label, items, foods, onAdd, onRemove, readOnly = false }) {
@@ -90,9 +91,9 @@ const styles = StyleSheet.create({
     letterSpacing: 1.5,
     color: colors.ink3,
   },
-  name: { fontSize: fontSizes.lg, fontWeight: '600', color: colors.ink, marginTop: 2 },
+  name: { fontSize: fontSizes.lg, fontFamily: fonts.serifMedium, color: colors.ink, marginTop: 2 },
   totalWrap: { flexDirection: 'row', alignItems: 'baseline', gap: 4 },
-  total: { fontSize: 22, fontWeight: '600', color: colors.ink },
+  total: { fontSize: 22, fontFamily: fonts.serifMedium, color: colors.ink },
   totalUnit: { fontSize: 12, color: colors.ink3 },
   emptyAdd: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 12 },
   emptyAddText: { fontSize: 14, color: colors.ink3 },

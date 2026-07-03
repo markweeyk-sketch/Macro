@@ -3,9 +3,10 @@
 // mode, rate), preview the calculated daily target with @macro/core calcGoal,
 // and save the recomputed goal. Also serves as first-run goal setup.
 import React, { useEffect, useMemo, useState } from 'react';
-import { View, Text, TextInput, Pressable, StyleSheet } from 'react-native';
+import { View, Pressable, StyleSheet } from 'react-native';
+import { Text, TextInput } from '../ui/type';
 import { calcGoal } from '@macro/core/data';
-import { colors, radii, spacing, fontSizes } from '@macro/core/theme';
+import { colors, radii, spacing, fontSizes, fonts } from '@macro/core/theme';
 import Sheet from './Sheet';
 import Icon from './Icon';
 
@@ -251,7 +252,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   numInputRow: { flexDirection: 'row', alignItems: 'baseline', gap: 6 },
-  numInput: { flex: 1, fontSize: 24, fontWeight: '600', color: colors.ink, padding: 0 },
+  numInput: { flex: 1, fontSize: 24, fontFamily: fonts.serifMedium, color: colors.ink, padding: 0 },
   numSuffix: { fontSize: 13, color: colors.ink3 },
 
   activityWrap: { gap: 6, marginBottom: 18 },
@@ -285,7 +286,7 @@ const styles = StyleSheet.create({
     padding: 18,
     marginTop: 4,
   },
-  previewKcal: { fontSize: 42, fontWeight: '600', color: colors.ink, marginTop: 4 },
+  previewKcal: { fontSize: 42, fontFamily: fonts.serifMedium, color: colors.ink, marginTop: 4 },
   previewUnit: { fontSize: 12, color: colors.ink3, marginTop: 2, marginBottom: 14 },
   previewMacros: { flexDirection: 'row', gap: 10 },
   previewTile: {

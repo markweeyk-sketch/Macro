@@ -8,15 +8,15 @@ import React from 'react';
 import {
   Modal,
   View,
-  Text,
   Pressable,
   ScrollView,
   StyleSheet,
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
+import { Text } from '../ui/type';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { colors, radii, spacing, fontSizes } from '@macro/core/theme';
+import { colors, radii, spacing, fontSizes, fonts } from '@macro/core/theme';
 import Icon from './Icon';
 
 export default function Sheet({
@@ -119,7 +119,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.line,
   },
-  title: { flex: 1, fontSize: fontSizes.title, fontWeight: '600', color: colors.ink },
+  title: { flex: 1, fontSize: fontSizes.title, fontFamily: fonts.serifMedium, color: colors.ink },
   iconBtn: {
     width: 38,
     height: 38,

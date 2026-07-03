@@ -3,14 +3,17 @@ import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
+import { useFonts } from 'expo-font';
 
 import TabNavigator from './src/navigation/TabNavigator';
 import AuthScreen from './src/screens/AuthScreen';
 import { auth } from '@macro/core/firebase';
 import { colors } from '@macro/core/theme';
+import { fontMap } from './src/ui/fonts';
 
 export default function App() {
   const [user, setUser] = useState(undefined); // undefined = loading
+  const [fontsLoaded] = useFonts(fontMap);
 
   useEffect(() => {
     // With RN persistence (see @macro/core/firebase), a previously signed-in
@@ -21,7 +24,7 @@ export default function App() {
 
   return (
     <SafeAreaProvider>
-      {user === undefined ? (
+      {user === undefined || !fontsLoaded ? (
         <View style={styles.splash}>
           <ActivityIndicator color={colors.ink} />
         </View>

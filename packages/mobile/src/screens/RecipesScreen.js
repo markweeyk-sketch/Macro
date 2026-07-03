@@ -6,9 +6,10 @@
 // Reads recipes from MacroData and writes through saveRecipe / deleteRecipe
 // (cache + Firestore saveRecipes). Recipe items keep the dual-format support.
 import React, { useState } from 'react';
-import { View, Text, ScrollView, Pressable, StyleSheet } from 'react-native';
+import { View, ScrollView, Pressable, StyleSheet } from 'react-native';
+import { Text } from '../ui/type';
 import { nutritionFor } from '@macro/core/data';
-import { colors, radii, spacing, fontSizes } from '@macro/core/theme';
+import { colors, radii, spacing, fontSizes, fonts } from '@macro/core/theme';
 import { useMacroData, getRecipeItems } from '../state/MacroData';
 import Sheet from '../components/Sheet';
 import RecipeEditorSheet from '../components/RecipeEditorSheet';
@@ -245,8 +246,8 @@ const styles = StyleSheet.create({
     letterSpacing: 1.4,
     color: colors.ink3,
   },
-  title: { fontSize: 28, fontWeight: '600', color: colors.ink, marginTop: 2, maxWidth: 220 },
-  titleEm: { fontStyle: 'italic' },
+  title: { fontSize: 28, fontFamily: fonts.serifMedium, color: colors.ink, marginTop: 2, maxWidth: 220 },
+  titleEm: { fontFamily: fonts.serifItalic },
   newBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -319,7 +320,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     alignItems: 'center',
   },
-  tileVal: { fontSize: 16, fontWeight: '600' },
+  tileVal: { fontSize: 16, fontFamily: fonts.serifMedium },
   tileValBig: { fontSize: 22 },
   tileLabel: {
     fontSize: 10,
