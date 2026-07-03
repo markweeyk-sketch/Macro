@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useState } from 'react';
+import { Text, StyleSheet } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { Text } from 'react-native';
+import { colors, fontSizes } from '@macro/core/theme';
 
 import TodayScreen    from '../screens/TodayScreen';
 import LogScreen      from '../screens/LogScreen';
@@ -8,44 +9,58 @@ import PlanScreen     from '../screens/PlanScreen';
 import RecipesScreen  from '../screens/RecipesScreen';
 import ProgressScreen from '../screens/ProgressScreen';
 import ProfileScreen  from '../screens/ProfileScreen';
+import BottomNav from './BottomNav';
+import TopBar from './TopBar';
+import Sheet from '../components/Sheet';
 
 const Tab = createBottomTabNavigator();
 
-const TABS = [
-  { name: 'Today',    component: TodayScreen,    icon: '🏠' },
-  { name: 'Log',      component: LogScreen,      icon: '📖' },
-  { name: 'Plan',     component: PlanScreen,     icon: '🎯' },
-  { name: 'Recipes',  component: RecipesScreen,  icon: '⭐' },
-  { name: 'Progress', component: ProgressScreen, icon: '📊' },
-  { name: 'Profile',  component: ProfileScreen,  icon: '👤' },
+// Every screen stays registered so navigate('Log')/navigate('Profile') works,
+// but only Today/Recipes/Plan/Progress get a button in the bar — Profile is
+// reached from the TopBar user icon, Log (day history / meal breakdown) from
+// the date on the Today screen.
+const SCREENS = [
+  { name: 'Today',    component: TodayScreen },
+  { name: 'Recipes',  component: RecipesScreen },
+  { name: 'Plan',     component: PlanScreen },
+  { name: 'Progress', component: ProgressScreen },
+  { name: 'Log',      component: LogScreen },
+  { name: 'Profile',  component: ProfileScreen },
 ];
 
 export default function TabNavigator({ user }) {
+  const [addOpen, setAddOpen] = useState(false);
+
   return (
-    <Tab.Navigator
-      screenOptions={({ route }) => ({
-        headerShown: false,
-        tabBarIcon: ({ focused }) => {
-          const tab = TABS.find((t) => t.name === route.name);
-          return <Text style={{ fontSize: focused ? 22 : 18 }}>{tab?.icon}</Text>;
-        },
-        tabBarActiveTintColor:   '#1A1A1A',
-        tabBarInactiveTintColor: '#9E9E9E',
-        tabBarStyle: {
-          backgroundColor: '#FAFAF8',
-          borderTopColor:  '#E8E4DC',
-        },
-        tabBarLabelStyle: { fontSize: 10, fontWeight: '500' },
-      })}
-    >
-      {TABS.map(({ name, component }) => (
-        <Tab.Screen
-          key={name}
-          name={name}
-          component={component}
-          initialParams={{ user }}
-        />
-      ))}
-    </Tab.Navigator>
+    <>
+      <Tab.Navigator
+        sceneContainerStyle={{ backgroundColor: colors.bg }}
+        screenOptions={{
+          header: (props) => <TopBar {...props} />,
+        }}
+        tabBar={(props) => <BottomNav {...props} onAdd={() => setAddOpen(true)} />}
+      >
+        {SCREENS.map(({ name, component }) => (
+          <Tab.Screen
+            key={name}
+            name={name}
+            component={component}
+            initialParams={{ user }}
+          />
+        ))}
+      </Tab.Navigator>
+
+      {/* Web FAB opens AddFoodSheet; the real food search lands with the Today
+          screen port (Phase 1). Until then the sheet is an honest placeholder. */}
+      <Sheet visible={addOpen} onClose={() => setAddOpen(false)} title="Add food">
+        <Text style={styles.placeholder}>
+          Food search is coming with the Today screen port.
+        </Text>
+      </Sheet>
+    </>
   );
 }
+
+const styles = StyleSheet.create({
+  placeholder: { fontSize: fontSizes.body, color: colors.ink3, lineHeight: 20 },
+});
