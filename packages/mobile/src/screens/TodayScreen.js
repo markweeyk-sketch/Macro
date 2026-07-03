@@ -1,48 +1,144 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, Pressable, StyleSheet } from 'react-native';
-import { auth, loadUserData, todayKey } from '@macro/core/firebase';
+// TodayScreen — Phase 1 port of the web `TodayPage` (web/app.jsx): the core
+// daily loop. Calorie ring + macro bars over today's totals, a quick-log strip
+// of frequent foods, and the four meals with add/remove. All data comes from
+// MacroData context (Firestore-backed, AsyncStorage-cached). Tapping the date
+// opens the full day log (Log is a hidden route, not a tab).
+import React from 'react';
+import { View, Text, ScrollView, Pressable, StyleSheet } from 'react-native';
+import { auth } from '@macro/core/firebase';
+import { colors, radii, spacing, fontSizes } from '@macro/core/theme';
+import { useMacroData, mealNow } from '../state/MacroData';
+import CalorieRing from '../components/charts/CalorieRing';
+import MacroBars from '../components/charts/MacroBars';
+import QuickLog from '../components/QuickLog';
+import MealSection from '../components/MealSection';
+
+const MEALS = [
+  { key: 'breakfast', label: 'Morning' },
+  { key: 'lunch', label: 'Midday' },
+  { key: 'dinner', label: 'Evening' },
+  { key: 'snack', label: 'Snacks' },
+];
+
+function greetingWord() {
+  const h = new Date().getHours();
+  if (h < 12) return 'Good morning';
+  if (h < 18) return 'Good afternoon';
+  return 'Good evening';
+}
+
+function goalCaption(goal) {
+  if (goal.mode === 'lose') return `Goal · Lose ${goal.rate}kg/wk`;
+  if (goal.mode === 'gain') return `Goal · Gain ${goal.rate}kg/wk`;
+  return 'Goal · Maintain';
+}
 
 export default function TodayScreen({ navigation }) {
-  const [status, setStatus] = useState('Checking Firebase…');
+  const { goal, totals, log, foods, frequent, addFood, removeLog, openAdd } =
+    useMacroData();
 
-  useEffect(() => {
-    const user = auth.currentUser;
-    if (!user) {
-      setStatus('Not signed in — Firebase auth is working.');
-      return;
-    }
-    loadUserData(user.uid)
-      .then((data) => {
-        if (data?.goal) {
-          setStatus(`Firebase OK — goal: ${data.goal.kcal} kcal (${data.goal.mode})`);
-        } else {
-          setStatus('Firebase OK — no goal saved yet.');
-        }
-      })
-      .catch((e) => setStatus(`Firebase error: ${e.message}`));
-  }, []);
+  const user = auth.currentUser;
+  const firstName =
+    user?.displayName?.split(' ')[0] || user?.email?.split('@')[0] || null;
+  const dateLabel = new Date().toLocaleDateString([], {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+  });
 
   return (
-    <View style={styles.container}>
-      <View style={styles.statusCard}>
-        <Text style={styles.statusLabel}>Firebase status</Text>
-        <Text style={styles.statusText}>{status}</Text>
-        {/* The date is the doorway to the day's full log (meal-by-meal
-            breakdown) — Log has no tab of its own. */}
-        <Pressable onPress={() => navigation.navigate('Log')} hitSlop={8}>
-          <Text style={styles.hint}>Date key: {todayKey()} — view food log ›</Text>
-        </Pressable>
+    <ScrollView
+      style={styles.screen}
+      contentContainerStyle={styles.content}
+      showsVerticalScrollIndicator={false}
+    >
+      <Pressable onPress={() => navigation.navigate('Log')} hitSlop={6}>
+        <Text style={styles.eyebrow}>{dateLabel} ›</Text>
+      </Pressable>
+      <Text style={styles.greeting}>
+        {firstName ? `${greetingWord()}, ` : "Today's "}
+        <Text style={styles.greetingEm}>{firstName || 'progress'}</Text>.
+      </Text>
+
+      <View style={styles.card}>
+        <View style={styles.ringWrap}>
+          <CalorieRing consumed={totals.kcal} goal={goal.kcal} mode={goal.mode} />
+        </View>
+        <Text style={styles.goalCaption}>
+          {goalCaption(goal)} · {goal.kcal} kcal
+        </Text>
+        <View style={styles.macroWrap}>
+          <MacroBars totals={totals} goal={goal} />
+        </View>
       </View>
-      <Text style={styles.placeholder}>Screens to be migrated from web app.</Text>
-    </View>
+
+      <Text style={styles.sectionLabel}>Quick log · recents</Text>
+      <QuickLog
+        foods={frequent}
+        onAdd={(f) => addFood(f, f.units[0].g, 0, mealNow())}
+      />
+
+      <Text style={[styles.sectionLabel, styles.sectionSpaced]}>Today's meals</Text>
+      {MEALS.map((m) => (
+        <MealSection
+          key={m.key}
+          meal={m.key}
+          label={m.label}
+          items={log.filter((x) => x.meal === m.key)}
+          foods={foods}
+          onAdd={() => openAdd(m.key)}
+          onRemove={removeLog}
+        />
+      ))}
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container:    { flex: 1, backgroundColor: '#F7F4EE', padding: 24 },
-  statusCard:   { backgroundColor: '#EFECE5', borderRadius: 16, padding: 18, marginBottom: 20 },
-  statusLabel:  { fontSize: 11, textTransform: 'uppercase', letterSpacing: 1.2, color: '#888', marginBottom: 6 },
-  statusText:   { fontSize: 14, color: '#1A1A1A', fontWeight: '500', lineHeight: 20 },
-  hint:         { fontSize: 12, color: '#888', marginTop: 6 },
-  placeholder:  { fontSize: 13, color: '#888', textAlign: 'center', marginTop: 40 },
+  screen: { flex: 1, backgroundColor: colors.bg },
+  content: {
+    paddingHorizontal: spacing.xl,
+    paddingTop: spacing.md,
+    paddingBottom: 120, // clear the raised FAB + tab bar
+  },
+  eyebrow: {
+    fontSize: fontSizes.eyebrow,
+    textTransform: 'uppercase',
+    letterSpacing: 1.4,
+    color: colors.ink3,
+  },
+  greeting: {
+    fontSize: fontSizes.display,
+    fontWeight: '600',
+    color: colors.ink,
+    marginTop: 6,
+    marginBottom: spacing.xl,
+  },
+  greetingEm: { fontStyle: 'italic' },
+  card: {
+    backgroundColor: colors.surface,
+    borderRadius: radii.lg,
+    padding: 24,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.line,
+  },
+  ringWrap: { alignItems: 'center' },
+  goalCaption: {
+    fontSize: fontSizes.eyebrow,
+    textTransform: 'uppercase',
+    letterSpacing: 1.2,
+    color: colors.ink3,
+    textAlign: 'center',
+    marginTop: 16,
+  },
+  macroWrap: { marginTop: 20 },
+  sectionLabel: {
+    fontSize: fontSizes.eyebrow,
+    textTransform: 'uppercase',
+    letterSpacing: 1.4,
+    color: colors.ink3,
+    marginTop: spacing['2xl'],
+    marginBottom: spacing.md,
+  },
+  sectionSpaced: { marginTop: spacing['2xl'] },
 });

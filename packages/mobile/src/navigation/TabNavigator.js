@@ -1,7 +1,6 @@
-import React, { useState } from 'react';
-import { Text, StyleSheet } from 'react-native';
+import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { colors, fontSizes } from '@macro/core/theme';
+import { colors } from '@macro/core/theme';
 
 import TodayScreen    from '../screens/TodayScreen';
 import LogScreen      from '../screens/LogScreen';
@@ -11,7 +10,8 @@ import ProgressScreen from '../screens/ProgressScreen';
 import ProfileScreen  from '../screens/ProfileScreen';
 import BottomNav from './BottomNav';
 import TopBar from './TopBar';
-import Sheet from '../components/Sheet';
+import AddFoodSheet from '../components/AddFoodSheet';
+import { MacroDataProvider, useMacroData } from '../state/MacroData';
 
 const Tab = createBottomTabNavigator();
 
@@ -29,7 +29,17 @@ const SCREENS = [
 ];
 
 export default function TabNavigator({ user }) {
-  const [addOpen, setAddOpen] = useState(false);
+  // MacroDataProvider holds the shared daily state (goal, today's log, totals)
+  // above the tabs so the Today screen and the global add-food sheet share it.
+  return (
+    <MacroDataProvider>
+      <Tabs user={user} />
+    </MacroDataProvider>
+  );
+}
+
+function Tabs({ user }) {
+  const { openAdd } = useMacroData();
 
   return (
     <>
@@ -38,7 +48,7 @@ export default function TabNavigator({ user }) {
         screenOptions={{
           header: (props) => <TopBar {...props} />,
         }}
-        tabBar={(props) => <BottomNav {...props} onAdd={() => setAddOpen(true)} />}
+        tabBar={(props) => <BottomNav {...props} onAdd={() => openAdd()} />}
       >
         {SCREENS.map(({ name, component }) => (
           <Tab.Screen
@@ -50,17 +60,9 @@ export default function TabNavigator({ user }) {
         ))}
       </Tab.Navigator>
 
-      {/* Web FAB opens AddFoodSheet; the real food search lands with the Today
-          screen port (Phase 1). Until then the sheet is an honest placeholder. */}
-      <Sheet visible={addOpen} onClose={() => setAddOpen(false)} title="Add food">
-        <Text style={styles.placeholder}>
-          Food search is coming with the Today screen port.
-        </Text>
-      </Sheet>
+      {/* Single global add-food sheet, driven by MacroData's addOpen/addMeal —
+          opened by the tab-bar FAB or any meal's "add". */}
+      <AddFoodSheet />
     </>
   );
 }
-
-const styles = StyleSheet.create({
-  placeholder: { fontSize: fontSizes.body, color: colors.ink3, lineHeight: 20 },
-});
