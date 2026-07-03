@@ -36,6 +36,14 @@ export default function ProfileScreen() {
     { label: 'Fat', v: goal.fat, c: colors.fColor },
   ];
 
+  // Save the edited goal, but re-anchor the "start" weight to the entered
+  // current weight until there's real weigh-in history — otherwise Progress
+  // measures change against the default start set when the account was created.
+  const handleSaveGoal = (nextGoal) => {
+    const startKg = weights && weights.length > 0 ? nextGoal.startKg : nextGoal.currentKg;
+    updateGoal({ ...nextGoal, startKg });
+  };
+
   const confirmFooter = (
     <>
       <Pressable style={[styles.btn, styles.btnGhost]} onPress={() => setConfirmOpen(false)}>
@@ -92,19 +100,21 @@ export default function ProfileScreen() {
             </View>
 
             <View style={styles.card}>
-              <Text style={styles.eyebrow}>Weight goal</Text>
+              <View style={styles.cardHd}>
+                <Text style={styles.eyebrow}>Weight goal</Text>
+                <View style={styles.modePill}>
+                  <Text style={styles.modePillText}>{modeLabel}</Text>
+                </View>
+              </View>
               <View style={styles.weightRow}>
                 <View>
                   <Text style={styles.weightNum}>{currentKg}</Text>
                   <Text style={styles.weightCap}>current kg</Text>
                 </View>
                 <Icon name="arrowR" size={18} color={colors.ink3} />
-                <View style={styles.alignEnd}>
+                <View>
                   <Text style={styles.weightNum}>{goal.weightKg}</Text>
                   <Text style={styles.weightCap}>target kg</Text>
-                </View>
-                <View style={styles.modePill}>
-                  <Text style={styles.modePillText}>{modeLabel}</Text>
                 </View>
               </View>
             </View>
@@ -128,7 +138,7 @@ export default function ProfileScreen() {
         visible={editOpen}
         onClose={() => setEditOpen(false)}
         goal={goal}
-        onSave={updateGoal}
+        onSave={handleSaveGoal}
       />
 
       <Sheet
@@ -209,7 +219,6 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   modePill: {
-    marginLeft: 'auto',
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: radii.pill,

@@ -24,7 +24,7 @@ export default function WeightChart({ entries, goalKg, height = 180 }) {
     return (
       <View style={[styles.empty, { height }]} onLayout={(e) => setW(e.nativeEvent.layout.width)}>
         <Text style={styles.emptyText}>
-          Log at least 2 weight entries to see your trend.
+          Weigh in on at least 2 different days to see your trend.
         </Text>
       </View>
     );
