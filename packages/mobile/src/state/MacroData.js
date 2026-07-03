@@ -31,6 +31,7 @@ import {
   saveGoal,
   saveWeights,
   savePlan,
+  saveRecipes,
 } from '@macro/core/firebase';
 import { KEYS, getJSON, setJSON } from '../lib/storage';
 
@@ -278,6 +279,44 @@ export function MacroDataProvider({ children }) {
     [date, uid]
   );
 
+  // Replace the whole goal (from the profile/goal editor) and persist. Mirrors
+  // the web app's setGoal + Firestore sync.
+  const updateGoal = useCallback(
+    (nextGoal) => {
+      setGoal(nextGoal);
+      setJSON(KEYS.goal, nextGoal);
+      if (uid) saveGoal(uid, nextGoal).catch(() => {});
+    },
+    [uid]
+  );
+
+  // Upsert a recipe (create or replace by id) and persist. Mirrors web saveRecipe.
+  const saveRecipe = useCallback(
+    (recipe) => {
+      setRecipes((cur) => {
+        const idx = cur.findIndex((x) => x.id === recipe.id);
+        const next = idx >= 0 ? cur.map((x) => (x.id === recipe.id ? recipe : x)) : [...cur, recipe];
+        setJSON(KEYS.recipes, next);
+        if (uid) saveRecipes(uid, next).catch(() => {});
+        return next;
+      });
+    },
+    [uid]
+  );
+
+  // Delete a recipe by id and persist. Mirrors web deleteRecipe.
+  const deleteRecipe = useCallback(
+    (id) => {
+      setRecipes((cur) => {
+        const next = cur.filter((x) => x.id !== id);
+        setJSON(KEYS.recipes, next);
+        if (uid) saveRecipes(uid, next).catch(() => {});
+        return next;
+      });
+    },
+    [uid]
+  );
+
   // Replace the weekly plan (whole array) and persist. The Plan screen computes
   // the next plan (set/remove a slot, auto-plan) and hands it here.
   const updatePlan = useCallback(
@@ -309,13 +348,16 @@ export function MacroDataProvider({ children }) {
       addFood,
       removeLog,
       logWeight,
+      updateGoal,
       updatePlan,
+      saveRecipe,
+      deleteRecipe,
       addOpen,
       addMeal,
       openAdd,
       closeAdd,
     }),
-    [goal, log, weights, recipes, weekPlan, totals, frequent, ready, addFood, removeLog, logWeight, updatePlan, addOpen, addMeal, openAdd, closeAdd]
+    [goal, log, weights, recipes, weekPlan, totals, frequent, ready, addFood, removeLog, logWeight, updateGoal, updatePlan, saveRecipe, deleteRecipe, addOpen, addMeal, openAdd, closeAdd]
   );
 
   return <MacroContext.Provider value={value}>{children}</MacroContext.Provider>;
