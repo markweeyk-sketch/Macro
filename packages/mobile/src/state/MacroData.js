@@ -15,7 +15,13 @@ import React, {
   useMemo,
   useState,
 } from 'react';
-import { FOODS, FREQUENT_IDS, nutritionFor, calcGoal } from '@macro/core/data';
+import {
+  FOODS,
+  FREQUENT_IDS,
+  SEEDED_RECIPE_IDS,
+  nutritionFor,
+  calcGoal,
+} from '@macro/core/data';
 import {
   auth,
   todayKey,
@@ -24,6 +30,7 @@ import {
   saveDayLog,
   saveGoal,
   saveWeights,
+  savePlan,
 } from '@macro/core/firebase';
 import { KEYS, getJSON, setJSON } from '../lib/storage';
 
@@ -44,6 +51,30 @@ export const DEFAULT_GOAL = {
   stepsGoal: 8000,
   onboarded: false,
 };
+
+// Empty weekly meal plan: 7 days, each with four empty slots (web EMPTY_WEEK_PLAN).
+export const EMPTY_WEEK_PLAN = Array.from({ length: 7 }, () => ({
+  breakfast: null,
+  lunch: null,
+  dinner: null,
+  snack: null,
+}));
+
+// Normalize a recipe's ingredients into { food, grams, unitIndex }, supporting
+// BOTH the legacy string[] (food IDs) and the newer {foodId,grams,unitIndex}[]
+// formats — mirrors web getRecipeItems (app.jsx). Never drop either format.
+export function getRecipeItems(recipe, foods = FOODS) {
+  return (recipe.items || [])
+    .map((item) => {
+      const foodId = typeof item === 'string' ? item : item.foodId;
+      const food = foods.find((f) => f.id === foodId);
+      if (!food) return null;
+      const grams = typeof item === 'string' ? food.units[0].g : item.grams;
+      const unitIndex = typeof item === 'string' ? 0 : item.unitIndex || 0;
+      return { food, grams, unitIndex };
+    })
+    .filter(Boolean);
+}
 
 // Which meal a "quick add" defaults to, by time of day (web/app.jsx mealNow).
 export function mealNow() {
@@ -88,6 +119,8 @@ export function MacroDataProvider({ children }) {
   const [goal, setGoal] = useState(DEFAULT_GOAL);
   const [log, setLog] = useState([]);
   const [weights, setWeights] = useState([]);
+  const [recipes, setRecipes] = useState([]);
+  const [weekPlan, setWeekPlan] = useState(EMPTY_WEEK_PLAN);
   const [ready, setReady] = useState(false);
 
   // Global add-food sheet control (opened by the tab-bar FAB or a meal's "add").
@@ -100,15 +133,20 @@ export function MacroDataProvider({ children }) {
   useEffect(() => {
     let alive = true;
     (async () => {
-      const [cachedGoal, cachedLog, cachedWeights] = await Promise.all([
-        getJSON(KEYS.goal, null),
-        getJSON(KEYS.log, null),
-        getJSON(KEYS.weights, null),
-      ]);
+      const [cachedGoal, cachedLog, cachedWeights, cachedRecipes, cachedPlan] =
+        await Promise.all([
+          getJSON(KEYS.goal, null),
+          getJSON(KEYS.log, null),
+          getJSON(KEYS.weights, null),
+          getJSON(KEYS.recipes, null),
+          getJSON(KEYS.plan, null),
+        ]);
       if (alive) {
         if (cachedGoal) setGoal((g) => ({ ...g, ...cachedGoal }));
         if (Array.isArray(cachedLog)) setLog(cachedLog);
         if (Array.isArray(cachedWeights)) setWeights(cachedWeights);
+        if (Array.isArray(cachedRecipes)) setRecipes(cachedRecipes);
+        if (Array.isArray(cachedPlan)) setWeekPlan(cachedPlan);
       }
       if (uid) {
         try {
@@ -119,6 +157,10 @@ export function MacroDataProvider({ children }) {
           if (!alive) return;
           if (data?.goal) setGoal({ ...DEFAULT_GOAL, ...data.goal });
           if (Array.isArray(data?.weights)) setWeights(data.weights);
+          // Strip legacy seeded recipes on load, matching the web app.
+          if (Array.isArray(data?.recipes))
+            setRecipes(data.recipes.filter((r) => !SEEDED_RECIPE_IDS.has(r.id)));
+          if (Array.isArray(data?.weekPlan)) setWeekPlan(data.weekPlan);
           setLog(dayEntries ?? []); // authoritative: empty means empty today
         } catch {
           // offline / permission error — keep the cached values
@@ -236,6 +278,17 @@ export function MacroDataProvider({ children }) {
     [date, uid]
   );
 
+  // Replace the weekly plan (whole array) and persist. The Plan screen computes
+  // the next plan (set/remove a slot, auto-plan) and hands it here.
+  const updatePlan = useCallback(
+    (nextPlan) => {
+      setWeekPlan(nextPlan);
+      setJSON(KEYS.plan, nextPlan);
+      if (uid) savePlan(uid, nextPlan).catch(() => {});
+    },
+    [uid]
+  );
+
   const openAdd = useCallback((meal) => {
     setAddMeal(meal || mealNow());
     setAddOpen(true);
@@ -248,18 +301,21 @@ export function MacroDataProvider({ children }) {
       goal,
       log,
       weights,
+      recipes,
+      weekPlan,
       totals,
       frequent,
       ready,
       addFood,
       removeLog,
       logWeight,
+      updatePlan,
       addOpen,
       addMeal,
       openAdd,
       closeAdd,
     }),
-    [goal, log, weights, totals, frequent, ready, addFood, removeLog, logWeight, addOpen, addMeal, openAdd, closeAdd]
+    [goal, log, weights, recipes, weekPlan, totals, frequent, ready, addFood, removeLog, logWeight, updatePlan, addOpen, addMeal, openAdd, closeAdd]
   );
 
   return <MacroContext.Provider value={value}>{children}</MacroContext.Provider>;
