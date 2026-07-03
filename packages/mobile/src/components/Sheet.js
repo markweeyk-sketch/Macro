@@ -43,6 +43,7 @@ export default function Sheet({
       transparent
       animationType="slide"
       statusBarTranslucent
+      navigationBarTranslucent
       onRequestClose={onClose}
     >
       <View style={styles.root}>
@@ -55,7 +56,7 @@ export default function Sheet({
           style={styles.kav}
           pointerEvents="box-none"
         >
-          <View style={styles.panel}>
+          <View style={[styles.panel, { paddingBottom: insets.bottom }]}>
             <View style={styles.grab} />
 
             {(title || onClose) && (
@@ -74,12 +75,7 @@ export default function Sheet({
             <Body {...bodyProps}>{children}</Body>
 
             {footer && (
-              <View
-                style={[
-                  styles.foot,
-                  { paddingBottom: spacing.xl + insets.bottom },
-                ]}
-              >
+              <View style={styles.foot}>
                 {footer}
               </View>
             )}
@@ -136,6 +132,7 @@ const styles = StyleSheet.create({
   foot: {
     paddingHorizontal: 22,
     paddingTop: 14,
+    paddingBottom: spacing.xl,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.line,
     flexDirection: 'row',

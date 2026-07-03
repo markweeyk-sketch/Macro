@@ -15,7 +15,7 @@ import React, {
   useMemo,
   useState,
 } from 'react';
-import { FOODS, FREQUENT_IDS, nutritionFor } from '@macro/core/data';
+import { FOODS, FREQUENT_IDS, nutritionFor, calcGoal } from '@macro/core/data';
 import {
   auth,
   todayKey,
@@ -23,6 +23,7 @@ import {
   loadDayLog,
   saveDayLog,
   saveGoal,
+  saveWeights,
 } from '@macro/core/firebase';
 import { KEYS, getJSON, setJSON } from '../lib/storage';
 
@@ -86,6 +87,7 @@ export function MacroDataProvider({ children }) {
 
   const [goal, setGoal] = useState(DEFAULT_GOAL);
   const [log, setLog] = useState([]);
+  const [weights, setWeights] = useState([]);
   const [ready, setReady] = useState(false);
 
   // Global add-food sheet control (opened by the tab-bar FAB or a meal's "add").
@@ -98,13 +100,15 @@ export function MacroDataProvider({ children }) {
   useEffect(() => {
     let alive = true;
     (async () => {
-      const [cachedGoal, cachedLog] = await Promise.all([
+      const [cachedGoal, cachedLog, cachedWeights] = await Promise.all([
         getJSON(KEYS.goal, null),
         getJSON(KEYS.log, null),
+        getJSON(KEYS.weights, null),
       ]);
       if (alive) {
         if (cachedGoal) setGoal((g) => ({ ...g, ...cachedGoal }));
         if (Array.isArray(cachedLog)) setLog(cachedLog);
+        if (Array.isArray(cachedWeights)) setWeights(cachedWeights);
       }
       if (uid) {
         try {
@@ -114,6 +118,7 @@ export function MacroDataProvider({ children }) {
           ]);
           if (!alive) return;
           if (data?.goal) setGoal({ ...DEFAULT_GOAL, ...data.goal });
+          if (Array.isArray(data?.weights)) setWeights(data.weights);
           setLog(dayEntries ?? []); // authoritative: empty means empty today
         } catch {
           // offline / permission error — keep the cached values
@@ -188,6 +193,49 @@ export function MacroDataProvider({ children }) {
     [persistLog]
   );
 
+  // Record today's weight (one entry per day, deduped) and update the goal's
+  // currentKg — recalculating macros if the profile has the biometrics for it.
+  // Mirrors web handleLogWeight (app.jsx).
+  const logWeight = useCallback(
+    (weight, recalculate) => {
+      setWeights((cur) => {
+        const filtered = cur.filter((e) => e.date !== date);
+        const next = [...filtered, { date, weight }].sort((a, b) =>
+          a.date.localeCompare(b.date)
+        );
+        setJSON(KEYS.weights, next);
+        if (uid) saveWeights(uid, next).catch(() => {});
+        return next;
+      });
+      setGoal((g) => {
+        let next = { ...g, currentKg: weight };
+        if (recalculate && g.sex && g.age && g.heightCm && g.activity) {
+          const calc = calcGoal({
+            sex: g.sex,
+            age: +g.age,
+            heightCm: +g.heightCm,
+            currentKg: weight,
+            targetKg: +(g.weightKg || weight),
+            activity: g.activity,
+            mode: g.mode,
+            rate: g.rate,
+          });
+          next = {
+            ...next,
+            kcal: calc.kcal,
+            protein: calc.protein,
+            carbs: calc.carbs,
+            fat: calc.fat,
+          };
+        }
+        setJSON(KEYS.goal, next);
+        if (uid) saveGoal(uid, next).catch(() => {});
+        return next;
+      });
+    },
+    [date, uid]
+  );
+
   const openAdd = useCallback((meal) => {
     setAddMeal(meal || mealNow());
     setAddOpen(true);
@@ -199,17 +247,19 @@ export function MacroDataProvider({ children }) {
       foods: FOODS,
       goal,
       log,
+      weights,
       totals,
       frequent,
       ready,
       addFood,
       removeLog,
+      logWeight,
       addOpen,
       addMeal,
       openAdd,
       closeAdd,
     }),
-    [goal, log, totals, frequent, ready, addFood, removeLog, addOpen, addMeal, openAdd, closeAdd]
+    [goal, log, weights, totals, frequent, ready, addFood, removeLog, logWeight, addOpen, addMeal, openAdd, closeAdd]
   );
 
   return <MacroContext.Provider value={value}>{children}</MacroContext.Provider>;
