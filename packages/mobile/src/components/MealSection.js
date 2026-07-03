@@ -7,7 +7,7 @@ import { nutritionFor } from '@macro/core/data';
 import { colors, fontSizes } from '@macro/core/theme';
 import Icon from './Icon';
 
-export default function MealSection({ meal, label, items, foods, onAdd, onRemove }) {
+export default function MealSection({ meal, label, items, foods, onAdd, onRemove, readOnly = false }) {
   const total = items.reduce((s, it) => {
     const f = foods.find((x) => x.id === it.foodId);
     return f ? s + nutritionFor(f, it.grams).kcal : s;
@@ -27,10 +27,14 @@ export default function MealSection({ meal, label, items, foods, onAdd, onRemove
       </View>
 
       {items.length === 0 ? (
-        <Pressable style={styles.emptyAdd} onPress={onAdd}>
-          <Icon name="plus" size={16} color={colors.ink3} />
-          <Text style={styles.emptyAddText}>Add to {meal}</Text>
-        </Pressable>
+        readOnly ? (
+          <Text style={styles.emptyReadOnly}>Nothing logged</Text>
+        ) : (
+          <Pressable style={styles.emptyAdd} onPress={onAdd}>
+            <Icon name="plus" size={16} color={colors.ink3} />
+            <Text style={styles.emptyAddText}>Add to {meal}</Text>
+          </Pressable>
+        )
       ) : (
         <>
           {items.map((it) => {
@@ -49,20 +53,24 @@ export default function MealSection({ meal, label, items, foods, onAdd, onRemove
                   </Text>
                 </View>
                 <Text style={styles.foodKcal}>{Math.round(n.kcal)}</Text>
-                <Pressable
-                  style={styles.removeBtn}
-                  onPress={() => onRemove(it.id)}
-                  hitSlop={8}
-                >
-                  <Icon name="minus" size={14} color={colors.ink3} />
-                </Pressable>
+                {!readOnly && (
+                  <Pressable
+                    style={styles.removeBtn}
+                    onPress={() => onRemove(it.id)}
+                    hitSlop={8}
+                  >
+                    <Icon name="minus" size={14} color={colors.ink3} />
+                  </Pressable>
+                )}
               </View>
             );
           })}
-          <Pressable style={styles.addMore} onPress={onAdd}>
-            <Icon name="plus" size={14} color={colors.ink3} />
-            <Text style={styles.addMoreText}>Add more</Text>
-          </Pressable>
+          {!readOnly && (
+            <Pressable style={styles.addMore} onPress={onAdd}>
+              <Icon name="plus" size={14} color={colors.ink3} />
+              <Text style={styles.addMoreText}>Add more</Text>
+            </Pressable>
+          )}
         </>
       )}
     </View>
@@ -88,6 +96,7 @@ const styles = StyleSheet.create({
   totalUnit: { fontSize: 12, color: colors.ink3 },
   emptyAdd: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 12 },
   emptyAddText: { fontSize: 14, color: colors.ink3 },
+  emptyReadOnly: { fontSize: 14, color: colors.ink3, paddingVertical: 12 },
   foodRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10 },
   foodEmoji: { fontSize: 22, width: 28, textAlign: 'center' },
   foodInfo: { flex: 1 },

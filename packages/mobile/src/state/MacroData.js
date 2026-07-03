@@ -53,6 +53,25 @@ export function mealNow() {
   return 'snack';
 }
 
+// Sum a day's entries into { kcal, p, c, f } — same reduction the web `totals`
+// memo does. Shared so today's live log and any past day (Log screen) match.
+export function computeTotals(entries) {
+  let kcal = 0,
+    p = 0,
+    c = 0,
+    f = 0;
+  (entries || []).forEach((it) => {
+    const food = FOODS.find((x) => x.id === it.foodId);
+    if (!food) return;
+    const n = nutritionFor(food, it.grams);
+    kcal += n.kcal;
+    p += n.p;
+    c += n.c;
+    f += n.f;
+  });
+  return { kcal, p, c, f };
+}
+
 const MacroContext = createContext(null);
 
 export function useMacroData() {
@@ -107,22 +126,7 @@ export function MacroDataProvider({ children }) {
     };
   }, [uid, date]);
 
-  const totals = useMemo(() => {
-    let kcal = 0,
-      p = 0,
-      c = 0,
-      f = 0;
-    log.forEach((it) => {
-      const food = FOODS.find((x) => x.id === it.foodId);
-      if (!food) return;
-      const n = nutritionFor(food, it.grams);
-      kcal += n.kcal;
-      p += n.p;
-      c += n.c;
-      f += n.f;
-    });
-    return { kcal, p, c, f };
-  }, [log]);
+  const totals = useMemo(() => computeTotals(log), [log]);
 
   const frequent = useMemo(
     () => FREQUENT_IDS.map((id) => FOODS.find((f) => f.id === id)).filter(Boolean),
