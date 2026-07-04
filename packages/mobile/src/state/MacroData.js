@@ -225,6 +225,47 @@ export function MacroDataProvider({ children }) {
     [date, uid, persistLog]
   );
 
+  // Log every ingredient of a recipe into one meal in a single write — the
+  // native "quick meal" the web app doesn't have. Grams/units come straight from
+  // the recipe items so the kcal added matches the total shown on the card.
+  const logRecipe = useCallback(
+    (recipe, meal) => {
+      const items = getRecipeItems(recipe, FOODS);
+      if (!items.length) return;
+      const time = new Date().toLocaleTimeString([], {
+        hour: 'numeric',
+        minute: '2-digit',
+      });
+      const base = Date.now();
+      setLog((cur) => {
+        const next = [
+          ...cur,
+          ...items.map(({ food, grams, unitIndex }, i) => ({
+            id: 'l' + base + '-' + i,
+            foodId: food.id,
+            meal,
+            grams,
+            unitIndex,
+            time,
+          })),
+        ];
+        persistLog(next);
+        return next;
+      });
+      // Streak bump — same logic as addFood, once for the whole recipe.
+      setGoal((g) => {
+        if (g.lastLogDate === date) return g;
+        const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+        const streak = g.lastLogDate === yesterday ? (g.streak || 0) + 1 : 1;
+        const next = { ...g, streak, lastLogDate: date };
+        setJSON(KEYS.goal, next);
+        if (uid) saveGoal(uid, next).catch(() => {});
+        return next;
+      });
+    },
+    [date, uid, persistLog]
+  );
+
   const removeLog = useCallback(
     (id) => {
       setLog((cur) => {
@@ -328,6 +369,32 @@ export function MacroDataProvider({ children }) {
     [uid]
   );
 
+  // Wipe all account data back to defaults — logs, goal, recipes, plan, and
+  // weights — in both the cache and Firestore. Mirrors the web app's reset.
+  const resetAccountData = useCallback(async () => {
+    setLog([]);
+    setGoal(DEFAULT_GOAL);
+    setRecipes([]);
+    setWeekPlan(EMPTY_WEEK_PLAN);
+    setWeights([]);
+    await Promise.all([
+      setJSON(KEYS.log, []),
+      setJSON(KEYS.goal, DEFAULT_GOAL),
+      setJSON(KEYS.recipes, []),
+      setJSON(KEYS.plan, EMPTY_WEEK_PLAN),
+      setJSON(KEYS.weights, []),
+    ]);
+    if (uid) {
+      await Promise.all([
+        saveDayLog(uid, date, []),
+        saveGoal(uid, DEFAULT_GOAL),
+        saveRecipes(uid, []),
+        savePlan(uid, EMPTY_WEEK_PLAN),
+        saveWeights(uid, []),
+      ]).catch(() => {});
+    }
+  }, [uid, date]);
+
   const openAdd = useCallback((meal) => {
     setAddMeal(meal || mealNow());
     setAddOpen(true);
@@ -346,18 +413,20 @@ export function MacroDataProvider({ children }) {
       frequent,
       ready,
       addFood,
+      logRecipe,
       removeLog,
       logWeight,
       updateGoal,
       updatePlan,
       saveRecipe,
       deleteRecipe,
+      resetAccountData,
       addOpen,
       addMeal,
       openAdd,
       closeAdd,
     }),
-    [goal, log, weights, recipes, weekPlan, totals, frequent, ready, addFood, removeLog, logWeight, updateGoal, updatePlan, saveRecipe, deleteRecipe, addOpen, addMeal, openAdd, closeAdd]
+    [goal, log, weights, recipes, weekPlan, totals, frequent, ready, addFood, logRecipe, removeLog, logWeight, updateGoal, updatePlan, saveRecipe, deleteRecipe, resetAccountData, addOpen, addMeal, openAdd, closeAdd]
   );
 
   return <MacroContext.Provider value={value}>{children}</MacroContext.Provider>;

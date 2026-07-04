@@ -18,10 +18,20 @@ import { nutritionFor } from '@macro/core/data';
 import { colors, radii, spacing, fontSizes, fonts } from '@macro/core/theme';
 import Sheet from './Sheet';
 import Icon from './Icon';
-import { useMacroData } from '../state/MacroData';
+import { useMacroData, getRecipeItems } from '../state/MacroData';
 
 const MEALS = ['breakfast', 'lunch', 'dinner', 'snack'];
 const OZ_TO_G = 28.3495;
+
+function recipeTotals(items) {
+  return items.reduce(
+    (s, { food, grams }) => {
+      const n = nutritionFor(food, grams);
+      return { kcal: s.kcal + n.kcal, p: s.p + n.p, c: s.c + n.c, f: s.f + n.f };
+    },
+    { kcal: 0, p: 0, c: 0, f: 0 }
+  );
+}
 
 function gramsFor(picked, unitIndex, amount) {
   const a = Math.max(0, +amount || 0);
@@ -31,9 +41,11 @@ function gramsFor(picked, unitIndex, amount) {
 }
 
 export default function AddFoodSheet() {
-  const { addOpen, addMeal, closeAdd, addFood, foods, frequent } = useMacroData();
+  const { addOpen, addMeal, closeAdd, addFood, logRecipe, foods, frequent, recipes } =
+    useMacroData();
 
   const [q, setQ] = useState('');
+  const [tab, setTab] = useState('foods'); // 'foods' | 'recipes'
   const [meal, setMeal] = useState('breakfast');
   const [picked, setPicked] = useState(null);
   const [unitIndex, setUnitIndex] = useState(0); // -1 = grams, -2 = ounces
@@ -43,6 +55,7 @@ export default function AddFoodSheet() {
   useEffect(() => {
     if (addOpen) {
       setQ('');
+      setTab('foods');
       setPicked(null);
       setUnitIndex(0);
       setAmount('1');
@@ -70,6 +83,11 @@ export default function AddFoodSheet() {
     const grams = gramsFor(picked, unitIndex, amount);
     const storedIdx = unitIndex < 0 ? -1 : unitIndex;
     addFood(picked, grams, storedIdx, meal);
+    closeAdd();
+  };
+
+  const logThisRecipe = (recipe) => {
+    logRecipe(recipe, meal);
     closeAdd();
   };
 
@@ -105,7 +123,35 @@ export default function AddFoodSheet() {
         ))}
       </View>
 
-      {!picked ? (
+      {/* Foods / Recipes toggle */}
+      {!picked && (
+        <View style={styles.segmented}>
+          {[
+            { k: 'foods', label: 'Foods' },
+            { k: 'recipes', label: 'Recipes' },
+          ].map((t) => (
+            <Pressable
+              key={t.k}
+              onPress={() => setTab(t.k)}
+              style={[styles.segment, tab === t.k && styles.segmentOn]}
+            >
+              <Text style={tab === t.k ? styles.segmentOnText : styles.segmentText}>
+                {t.label}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+      )}
+
+      {picked ? (
+        <PickedFood
+          picked={picked}
+          unitIndex={unitIndex}
+          setUnitIndex={setUnitIndex}
+          amount={amount}
+          setAmount={setAmount}
+        />
+      ) : tab === 'foods' ? (
         <>
           <View style={styles.search}>
             <Icon name="search" size={16} color={colors.ink3} />
@@ -140,14 +186,30 @@ export default function AddFoodSheet() {
             <Text style={styles.empty}>No matches for “{q}”.</Text>
           )}
         </>
+      ) : recipes.length === 0 ? (
+        <Text style={styles.empty}>
+          No recipes yet. Build one in the Recipes tab, then log it here in a tap.
+        </Text>
       ) : (
-        <PickedFood
-          picked={picked}
-          unitIndex={unitIndex}
-          setUnitIndex={setUnitIndex}
-          amount={amount}
-          setAmount={setAmount}
-        />
+        recipes.map((r) => {
+          const items = getRecipeItems(r, foods);
+          const tot = recipeTotals(items);
+          return (
+            <Pressable key={r.id} style={styles.foodRow} onPress={() => logThisRecipe(r)}>
+              <Text style={styles.foodEmoji}>{r.emoji}</Text>
+              <View style={styles.foodInfo}>
+                <Text style={styles.foodName} numberOfLines={1}>
+                  {r.name}
+                </Text>
+                <Text style={styles.foodMeta} numberOfLines={1}>
+                  {items.length} ingredients · serves {r.serves}
+                </Text>
+              </View>
+              <Text style={styles.foodKcal}>{Math.round(tot.kcal)} kcal</Text>
+              <Icon name="plus" size={16} color={colors.ink3} />
+            </Pressable>
+          );
+        })
       )}
     </Sheet>
   );
@@ -264,6 +326,23 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 16 },
+
+  segmented: {
+    flexDirection: 'row',
+    backgroundColor: colors.surface2,
+    borderRadius: radii.pill,
+    padding: 3,
+    marginBottom: 16,
+  },
+  segment: {
+    flex: 1,
+    paddingVertical: 8,
+    borderRadius: radii.pill,
+    alignItems: 'center',
+  },
+  segmentOn: { backgroundColor: colors.surface },
+  segmentText: { fontSize: 13, color: colors.ink3, fontWeight: '500' },
+  segmentOnText: { fontSize: 13, color: colors.ink, fontWeight: '600' },
   chip: { paddingVertical: 7, paddingHorizontal: 14, borderRadius: radii.pill },
   chipOn: { backgroundColor: colors.ink },
   chipOff: { backgroundColor: colors.surface2 },

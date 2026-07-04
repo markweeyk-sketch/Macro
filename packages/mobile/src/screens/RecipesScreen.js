@@ -36,7 +36,13 @@ function MacroTiles({ n, big }) {
     <View style={styles.tileRow}>
       {tiles.map((m) => (
         <View key={m.l} style={styles.tile}>
-          <Text style={[styles.tileVal, big && styles.tileValBig, { color: m.c }]}>{m.v}</Text>
+          <Text
+            style={[styles.tileVal, big && styles.tileValBig, { color: m.c }]}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+          >
+            {m.v}
+          </Text>
           <Text style={styles.tileLabel}>{m.l}</Text>
         </View>
       ))}
@@ -156,20 +162,11 @@ export default function RecipesScreen() {
                     {items.length} ingredients · serves {r.serves}
                   </Text>
                   <MacroTiles n={tot} />
-                  <View style={styles.chipWrap}>
-                    {items.slice(0, 3).map(({ food }) => (
-                      <View key={food.id} style={styles.foodChip}>
-                        <Text style={styles.foodChipText} numberOfLines={1}>
-                          {food.emoji} {food.name}
-                        </Text>
-                      </View>
-                    ))}
-                    {items.length > 3 && (
-                      <View style={styles.foodChip}>
-                        <Text style={styles.foodChipText}>+{items.length - 3}</Text>
-                      </View>
-                    )}
-                  </View>
+                  {items.length > 0 && (
+                    <Text style={styles.cardIngredients} numberOfLines={1}>
+                      {items.map(({ food }) => `${food.emoji} ${food.name}`).join('  ·  ')}
+                    </Text>
+                  )}
                 </View>
               </Pressable>
             );
@@ -278,15 +275,7 @@ const styles = StyleSheet.create({
   cardBody: { padding: 14 },
   cardTitle: { fontSize: fontSizes.base, fontWeight: '600', color: colors.ink },
   cardMeta: { fontSize: 11, color: colors.ink3, marginTop: 2, marginBottom: 12 },
-  chipWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginTop: 12 },
-  foodChip: {
-    backgroundColor: colors.surface2,
-    borderRadius: radii.pill,
-    paddingVertical: 4,
-    paddingHorizontal: 8,
-    maxWidth: '100%',
-  },
-  foodChipText: { fontSize: 11, color: colors.ink2 },
+  cardIngredients: { fontSize: 11, color: colors.ink3, marginTop: 12 },
 
   buildCard: {
     width: '48%',

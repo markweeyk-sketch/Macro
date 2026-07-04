@@ -16,7 +16,6 @@ import { colors, radii, spacing, fontSizes, fonts } from '@macro/core/theme';
 import Sheet from './Sheet';
 import Icon from './Icon';
 
-const EMOJIS = ['🍽️','🥣','🥗','🍱','🥘','🍲','🥙','🌮','🌯','🥪','🍳','🥚','🍗','🐟','🥩','🥦','🥕','🍠','🍚','🥑','🥤','🧃','🍵','☕'];
 const OZ_TO_G = 28.3495;
 
 function MacroTiles({ n, big }) {
@@ -40,7 +39,6 @@ function MacroTiles({ n, big }) {
 
 export default function RecipeEditorSheet({ visible, onClose, recipe, foods, onSave }) {
   const [name, setName] = useState('');
-  const [emoji, setEmoji] = useState('🍽️');
   const [serves, setServes] = useState(1);
   const [items, setItems] = useState([]); // [{ food, grams, unitIndex }]
   const [q, setQ] = useState('');
@@ -52,7 +50,6 @@ export default function RecipeEditorSheet({ visible, onClose, recipe, foods, onS
     if (!visible) return;
     if (recipe) {
       setName(recipe.name || '');
-      setEmoji(recipe.emoji || '🍽️');
       setServes(recipe.serves || 1);
       const loaded = (recipe.items || [])
         .map((item) => {
@@ -67,7 +64,6 @@ export default function RecipeEditorSheet({ visible, onClose, recipe, foods, onS
       setItems(loaded);
     } else {
       setName('');
-      setEmoji('🍽️');
       setServes(1);
       setItems([]);
     }
@@ -82,6 +78,10 @@ export default function RecipeEditorSheet({ visible, onClose, recipe, foods, onS
         : null,
     [q, foods]
   );
+
+  // The recipe icon is derived from its first ingredient rather than picked by
+  // hand — one less redundant step. Falls back to a saved emoji or a plate.
+  const emoji = items[0]?.food.emoji || recipe?.emoji || '🍽️';
 
   const totals = items.reduce(
     (s, { food, grams }) => {
@@ -164,7 +164,7 @@ export default function RecipeEditorSheet({ visible, onClose, recipe, foods, onS
       title={recipe ? 'Edit recipe' : 'New recipe'}
       footer={footer}
     >
-      {/* Name + emoji */}
+      {/* Name — the icon is auto-derived from the first ingredient */}
       <View style={styles.nameRow}>
         <View>
           <Text style={styles.label}>Icon</Text>
@@ -182,18 +182,6 @@ export default function RecipeEditorSheet({ visible, onClose, recipe, foods, onS
             style={styles.nameInput}
           />
         </View>
-      </View>
-
-      <View style={styles.emojiWrap}>
-        {EMOJIS.map((e) => (
-          <Pressable
-            key={e}
-            onPress={() => setEmoji(e)}
-            style={[styles.emojiBtn, emoji === e && styles.emojiBtnOn]}
-          >
-            <Text style={styles.emojiBtnText}>{e}</Text>
-          </Pressable>
-        ))}
       </View>
 
       <View style={styles.servesRow}>
@@ -382,17 +370,6 @@ const styles = StyleSheet.create({
     fontFamily: fonts.serifMedium,
     color: colors.ink,
   },
-  emojiWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 18 },
-  emojiBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: 9,
-    backgroundColor: colors.surface2,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  emojiBtnOn: { backgroundColor: colors.ink },
-  emojiBtnText: { fontSize: 18 },
   servesRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 20 },
   servesLabel: { fontSize: 13, color: colors.ink3, flex: 1 },
   servesNum: {
