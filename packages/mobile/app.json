@@ -7,9 +7,7 @@
     "userInterfaceStyle": "automatic",
     "icon": "./assets/icon.png",
     "backgroundColor": "#F7F4EE",
-    "runtimeVersion": {
-      "policy": "fingerprint"
-    },
+    "runtimeVersion": "1.0.0",
     "updates": {
       "fallbackToCacheTimeout": 0,
       "url": "https://u.expo.dev/0b4a2d01-d0f3-49f7-b579-7e1e62f42436"
