@@ -26,7 +26,8 @@ This is an npm-workspaces monorepo. The pieces that matter for migration:
   `Recipes`, `Progress`, `Profile`) are ~18–47 line placeholders, one of which literally
   reads "Screens to be migrated from web app." Stack: `expo` ^54, React Native 0.81,
   React 19, `@react-navigation` (native/bottom-tabs/stack), `victory-native` for charts,
-  `react-native-svg`, `expo-camera` + `expo-barcode-scanner` (for barcode food lookup),
+  `react-native-svg`, `expo-camera` (barcode food lookup uses its built-in scanner —
+  the standalone `expo-barcode-scanner` package is deprecated and won't compile on SDK 54),
   `firebase` ^10.
 - Repo root holds a **third, drifting copy** of the web files plus prototype-only files
   (`canvas.html`, `design-canvas.jsx`, `ios-frame.jsx`). **Ignore the root copy.** Treat
