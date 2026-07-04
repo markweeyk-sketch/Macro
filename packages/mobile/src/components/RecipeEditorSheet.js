@@ -3,7 +3,7 @@
 // ingredient list (remove), and an inline add-ingredient flow (search → pick a
 // unit + amount, preview macros, confirm). Saves items in the newer
 // {foodId,grams,unitIndex}[] shape; loads either legacy or new shape.
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Pressable,
@@ -45,6 +45,11 @@ export default function RecipeEditorSheet({ visible, onClose, recipe, foods, onS
   const [adding, setAdding] = useState(null); // food being added
   const [addUnitIdx, setAddUnitIdx] = useState(0);
   const [addAmount, setAddAmount] = useState('1');
+
+  // Scroll the ingredient search to the top of the sheet when focused so the
+  // keyboard never hides the first results.
+  const scrollRef = useRef(null);
+  const searchY = useRef(0);
 
   useEffect(() => {
     if (!visible) return;
@@ -163,6 +168,8 @@ export default function RecipeEditorSheet({ visible, onClose, recipe, foods, onS
       onClose={onClose}
       title={recipe ? 'Edit recipe' : 'New recipe'}
       footer={footer}
+      fullScreen
+      scrollRef={scrollRef}
     >
       {/* Name — the icon is auto-derived from the first ingredient */}
       <View style={styles.nameRow}>
@@ -231,7 +238,12 @@ export default function RecipeEditorSheet({ visible, onClose, recipe, foods, onS
       })}
 
       {!adding ? (
-        <View style={styles.addWrap}>
+        <View
+          style={styles.addWrap}
+          onLayout={(e) => {
+            searchY.current = e.nativeEvent.layout.y;
+          }}
+        >
           <View style={styles.search}>
             <Icon name="search" size={16} color={colors.ink3} />
             <TextInput
@@ -241,6 +253,12 @@ export default function RecipeEditorSheet({ visible, onClose, recipe, foods, onS
               placeholderTextColor={colors.ink3}
               autoCapitalize="none"
               style={styles.searchInput}
+              onFocus={() =>
+                scrollRef.current?.scrollTo({
+                  y: Math.max(0, searchY.current + 4),
+                  animated: true,
+                })
+              }
             />
           </View>
           {filtered && filtered.length === 0 && (

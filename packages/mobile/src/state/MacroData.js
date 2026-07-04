@@ -32,6 +32,8 @@ import {
   saveWeights,
   savePlan,
   saveRecipes,
+  saveCustomFoods,
+  saveFoodOverrides,
 } from '@macro/core/firebase';
 import { KEYS, getJSON, setJSON } from '../lib/storage';
 
@@ -88,13 +90,15 @@ export function mealNow() {
 
 // Sum a day's entries into { kcal, p, c, f } — same reduction the web `totals`
 // memo does. Shared so today's live log and any past day (Log screen) match.
-export function computeTotals(entries) {
+// Pass the context's merged `foods` so custom foods and overrides count; the
+// FOODS default keeps standalone callers working.
+export function computeTotals(entries, foods = FOODS) {
   let kcal = 0,
     p = 0,
     c = 0,
     f = 0;
   (entries || []).forEach((it) => {
-    const food = FOODS.find((x) => x.id === it.foodId);
+    const food = foods.find((x) => x.id === it.foodId);
     if (!food) return;
     const n = nutritionFor(food, it.grams);
     kcal += n.kcal;
@@ -122,6 +126,10 @@ export function MacroDataProvider({ children }) {
   const [weights, setWeights] = useState([]);
   const [recipes, setRecipes] = useState([]);
   const [weekPlan, setWeekPlan] = useState(EMPTY_WEEK_PLAN);
+  // User-created foods (scanned/manual, ids 'cf*') and per-user corrections to
+  // built-in FOODS entries ([{ id, ...patch }], applied over the static DB).
+  const [customFoods, setCustomFoods] = useState([]);
+  const [foodOverrides, setFoodOverrides] = useState([]);
   const [ready, setReady] = useState(false);
 
   // Global add-food sheet control (opened by the tab-bar FAB or a meal's "add").
@@ -134,13 +142,15 @@ export function MacroDataProvider({ children }) {
   useEffect(() => {
     let alive = true;
     (async () => {
-      const [cachedGoal, cachedLog, cachedWeights, cachedRecipes, cachedPlan] =
+      const [cachedGoal, cachedLog, cachedWeights, cachedRecipes, cachedPlan, cachedFoods, cachedOverrides] =
         await Promise.all([
           getJSON(KEYS.goal, null),
           getJSON(KEYS.log, null),
           getJSON(KEYS.weights, null),
           getJSON(KEYS.recipes, null),
           getJSON(KEYS.plan, null),
+          getJSON(KEYS.customFoods, null),
+          getJSON(KEYS.overrides, null),
         ]);
       if (alive) {
         if (cachedGoal) setGoal((g) => ({ ...g, ...cachedGoal }));
@@ -148,6 +158,8 @@ export function MacroDataProvider({ children }) {
         if (Array.isArray(cachedWeights)) setWeights(cachedWeights);
         if (Array.isArray(cachedRecipes)) setRecipes(cachedRecipes);
         if (Array.isArray(cachedPlan)) setWeekPlan(cachedPlan);
+        if (Array.isArray(cachedFoods)) setCustomFoods(cachedFoods);
+        if (Array.isArray(cachedOverrides)) setFoodOverrides(cachedOverrides);
       }
       if (uid) {
         try {
@@ -162,6 +174,8 @@ export function MacroDataProvider({ children }) {
           if (Array.isArray(data?.recipes))
             setRecipes(data.recipes.filter((r) => !SEEDED_RECIPE_IDS.has(r.id)));
           if (Array.isArray(data?.weekPlan)) setWeekPlan(data.weekPlan);
+          if (Array.isArray(data?.customFoods)) setCustomFoods(data.customFoods);
+          if (Array.isArray(data?.foodOverrides)) setFoodOverrides(data.foodOverrides);
           setLog(dayEntries ?? []); // authoritative: empty means empty today
         } catch {
           // offline / permission error — keep the cached values
@@ -174,11 +188,25 @@ export function MacroDataProvider({ children }) {
     };
   }, [uid, date]);
 
-  const totals = useMemo(() => computeTotals(log), [log]);
+  // The food database the app actually sees: built-ins with any per-user
+  // corrections applied ("fix everywhere" — past logs and recipes referencing
+  // the id pick the corrected values up automatically), plus the user's own
+  // created/scanned foods appended.
+  const foods = useMemo(() => {
+    const base = foodOverrides.length
+      ? FOODS.map((f) => {
+          const o = foodOverrides.find((x) => x.id === f.id);
+          return o ? { ...f, ...o } : f;
+        })
+      : FOODS;
+    return customFoods.length ? [...base, ...customFoods] : base;
+  }, [customFoods, foodOverrides]);
+
+  const totals = useMemo(() => computeTotals(log, foods), [log, foods]);
 
   const frequent = useMemo(
-    () => FREQUENT_IDS.map((id) => FOODS.find((f) => f.id === id)).filter(Boolean),
-    []
+    () => FREQUENT_IDS.map((id) => foods.find((f) => f.id === id)).filter(Boolean),
+    [foods]
   );
 
   const persistLog = useCallback(
@@ -230,7 +258,7 @@ export function MacroDataProvider({ children }) {
   // the recipe items so the kcal added matches the total shown on the card.
   const logRecipe = useCallback(
     (recipe, meal) => {
-      const items = getRecipeItems(recipe, FOODS);
+      const items = getRecipeItems(recipe, foods);
       if (!items.length) return;
       const time = new Date().toLocaleTimeString([], {
         hour: 'numeric',
@@ -263,7 +291,7 @@ export function MacroDataProvider({ children }) {
         return next;
       });
     },
-    [date, uid, persistLog]
+    [date, uid, persistLog, foods]
   );
 
   const removeLog = useCallback(
@@ -358,6 +386,56 @@ export function MacroDataProvider({ children }) {
     [uid]
   );
 
+  // Save a food from the food editor. Built-in FOODS ids become a per-user
+  // override patch ("fix everywhere" — every log/recipe referencing the id sees
+  // the corrected values); anything else upserts into customFoods.
+  const saveFood = useCallback(
+    (food) => {
+      if (FOODS.some((f) => f.id === food.id)) {
+        setFoodOverrides((cur) => {
+          const rest = cur.filter((x) => x.id !== food.id);
+          const next = [...rest, food];
+          setJSON(KEYS.overrides, next);
+          if (uid) saveFoodOverrides(uid, next).catch(() => {});
+          return next;
+        });
+      } else {
+        setCustomFoods((cur) => {
+          const idx = cur.findIndex((x) => x.id === food.id);
+          const next = idx >= 0 ? cur.map((x) => (x.id === food.id ? food : x)) : [...cur, food];
+          setJSON(KEYS.customFoods, next);
+          if (uid) saveCustomFoods(uid, next).catch(() => {});
+          return next;
+        });
+      }
+    },
+    [uid]
+  );
+
+  // Delete by id: for a built-in food this clears the override (reverting to
+  // the shipped values); for a custom food it removes it entirely. Old log
+  // entries referencing a deleted custom food are skipped by computeTotals.
+  const deleteFood = useCallback(
+    (id) => {
+      if (FOODS.some((f) => f.id === id)) {
+        setFoodOverrides((cur) => {
+          const next = cur.filter((x) => x.id !== id);
+          setJSON(KEYS.overrides, next);
+          if (uid) saveFoodOverrides(uid, next).catch(() => {});
+          return next;
+        });
+      } else {
+        setCustomFoods((cur) => {
+          const next = cur.filter((x) => x.id !== id);
+          setJSON(KEYS.customFoods, next);
+          if (uid) saveCustomFoods(uid, next).catch(() => {});
+          return next;
+        });
+      }
+    },
+    [uid]
+  );
+
   // Replace the weekly plan (whole array) and persist. The Plan screen computes
   // the next plan (set/remove a slot, auto-plan) and hands it here.
   const updatePlan = useCallback(
@@ -377,12 +455,16 @@ export function MacroDataProvider({ children }) {
     setRecipes([]);
     setWeekPlan(EMPTY_WEEK_PLAN);
     setWeights([]);
+    setCustomFoods([]);
+    setFoodOverrides([]);
     await Promise.all([
       setJSON(KEYS.log, []),
       setJSON(KEYS.goal, DEFAULT_GOAL),
       setJSON(KEYS.recipes, []),
       setJSON(KEYS.plan, EMPTY_WEEK_PLAN),
       setJSON(KEYS.weights, []),
+      setJSON(KEYS.customFoods, []),
+      setJSON(KEYS.overrides, []),
     ]);
     if (uid) {
       await Promise.all([
@@ -391,6 +473,8 @@ export function MacroDataProvider({ children }) {
         saveRecipes(uid, []),
         savePlan(uid, EMPTY_WEEK_PLAN),
         saveWeights(uid, []),
+        saveCustomFoods(uid, []),
+        saveFoodOverrides(uid, []),
       ]).catch(() => {});
     }
   }, [uid, date]);
@@ -403,7 +487,9 @@ export function MacroDataProvider({ children }) {
 
   const value = useMemo(
     () => ({
-      foods: FOODS,
+      foods,
+      customFoods,
+      foodOverrides,
       goal,
       log,
       weights,
@@ -420,13 +506,15 @@ export function MacroDataProvider({ children }) {
       updatePlan,
       saveRecipe,
       deleteRecipe,
+      saveFood,
+      deleteFood,
       resetAccountData,
       addOpen,
       addMeal,
       openAdd,
       closeAdd,
     }),
-    [goal, log, weights, recipes, weekPlan, totals, frequent, ready, addFood, logRecipe, removeLog, logWeight, updateGoal, updatePlan, saveRecipe, deleteRecipe, resetAccountData, addOpen, addMeal, openAdd, closeAdd]
+    [foods, customFoods, foodOverrides, goal, log, weights, recipes, weekPlan, totals, frequent, ready, addFood, logRecipe, removeLog, logWeight, updateGoal, updatePlan, saveRecipe, deleteRecipe, saveFood, deleteFood, resetAccountData, addOpen, addMeal, openAdd, closeAdd]
   );
 
   return <MacroContext.Provider value={value}>{children}</MacroContext.Provider>;

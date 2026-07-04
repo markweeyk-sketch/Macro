@@ -73,6 +73,12 @@ const PATHS = {
     </G>
   ),
   check: (k) => <Path key={k} d="M5 13l4 4L19 7" />,
+  pencil: (k) => (
+    <G key={k}>
+      <Path d="M17 3l4 4L8 20l-5 1 1-5L17 3z" />
+      <Path d="M14.5 5.5l4 4" />
+    </G>
+  ),
   minus: (k) => <Path key={k} d="M5 12h14" />,
   arrowR: (k) => (
     <G key={k}>

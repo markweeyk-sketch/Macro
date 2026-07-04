@@ -127,5 +127,17 @@ export function savePlan(uid, plan) {
 export function saveWeights(uid, weights) {
   return setDoc(doc(db, 'users', uid), { weights }, { merge: true });
 }
+// User-created foods (scanned or manual) — same shape as FOODS items, ids 'cf*',
+// optionally carrying a `barcode`. Stored as an array so merge:true replaces the
+// whole field (deletions propagate, unlike map fields which deep-merge).
+export function saveCustomFoods(uid, customFoods) {
+  return setDoc(doc(db, 'users', uid), { customFoods }, { merge: true });
+}
+// Per-user corrections to built-in FOODS entries ("fix everywhere"): an array of
+// { id, ...patch } applied over the static database at load. Array for the same
+// replace-not-merge reason as customFoods.
+export function saveFoodOverrides(uid, foodOverrides) {
+  return setDoc(doc(db, 'users', uid), { foodOverrides }, { merge: true });
+}
 
 export { auth, db };

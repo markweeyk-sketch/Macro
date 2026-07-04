@@ -11,11 +11,13 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Shared key names with the web app's localStorage cache.
 export const KEYS = {
-  log:     'macro.log.v2',
-  goal:    'macro.goal.v2',
-  recipes: 'macro.recipes',
-  plan:    'macro.plan.v1',
-  weights: 'macro.weights',
+  log:         'macro.log.v2',
+  goal:        'macro.goal.v2',
+  recipes:     'macro.recipes',
+  plan:        'macro.plan.v1',
+  weights:     'macro.weights',
+  customFoods: 'macro.customFoods',
+  overrides:   'macro.foodOverrides',
 };
 
 // ─── Imperative JSON helpers ─────────────────────────────────────────────────

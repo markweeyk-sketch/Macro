@@ -3,8 +3,14 @@
 // from web/styles.css and the *Sheet components in web/screens.jsx.
 //
 // Uses RN's built-in Modal (no extra native dep) per the migration plan's
-// "RN Modal" option, keeping the gesture surface simple for v1.
-import React from 'react';
+// "RN Modal" option. Two extras beyond the web version:
+//  - `fullScreen`: the panel fills the screen (minus the status bar) instead of
+//    hugging the bottom — used by the add-food flow so search results stay
+//    visible above the keyboard.
+//  - drag-to-dismiss: the grab-handle/header area is a PanResponder surface;
+//    dragging down past a threshold (or flicking) closes the sheet, otherwise
+//    it springs back. Core-RN PanResponder, no gesture-handler dependency.
+import React, { useEffect, useRef } from 'react';
 import {
   Modal,
   View,
@@ -13,6 +19,9 @@ import {
   StyleSheet,
   KeyboardAvoidingView,
   Platform,
+  Animated,
+  PanResponder,
+  useWindowDimensions,
 } from 'react-native';
 import { Text } from '../ui/type';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -29,13 +38,68 @@ export default function Sheet({
   // forces an explicit choice).
   dismissOnBackdrop = true,
   scroll = true,
+  fullScreen = false,
+  // Optional ref to the body ScrollView so callers can scroll a focused input
+  // (e.g. a search field) to the top when the keyboard opens.
+  scrollRef,
 }) {
   const insets = useSafeAreaInsets();
+  const { height: winH } = useWindowDimensions();
+
+  // Drag-to-dismiss: translate the panel with the finger (downward only) and
+  // either dismiss or spring back on release.
+  const drag = useRef(new Animated.Value(0)).current;
+  const pan = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_e, g) =>
+        g.dy > 6 && Math.abs(g.dy) > Math.abs(g.dx),
+      onPanResponderMove: (_e, g) => {
+        drag.setValue(Math.max(0, g.dy));
+      },
+      onPanResponderRelease: (_e, g) => {
+        if (g.dy > 130 || g.vy > 0.9) {
+          Animated.timing(drag, {
+            toValue: winH,
+            duration: 180,
+            useNativeDriver: true,
+          }).start(() => onCloseRef.current?.());
+        } else {
+          Animated.spring(drag, {
+            toValue: 0,
+            useNativeDriver: true,
+            bounciness: 4,
+          }).start();
+        }
+      },
+    })
+  ).current;
+
+  // Keep the latest onClose reachable from the (stable) PanResponder.
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+
+  // Reset the drag offset whenever the sheet (re)opens.
+  useEffect(() => {
+    if (visible) drag.setValue(0);
+  }, [visible, drag]);
 
   const Body = scroll ? ScrollView : View;
   const bodyProps = scroll
-    ? { contentContainerStyle: styles.bodyContent, showsVerticalScrollIndicator: false }
+    ? {
+        ref: scrollRef,
+        contentContainerStyle: styles.bodyContent,
+        showsVerticalScrollIndicator: false,
+        // One tap selects a result even while the keyboard is up (without this,
+        // the first tap only dismisses the keyboard).
+        keyboardShouldPersistTaps: 'handled',
+      }
     : { style: styles.bodyContent };
+
+  // In fullScreen the height cap lives on the KeyboardAvoidingView and the
+  // panel flexes inside it — so when the keyboard pads the KAV, the panel
+  // SHRINKS (keeping its top on screen) instead of being pushed up and off.
+  const kavSize = fullScreen ? { height: winH - insets.top - 10 } : null;
+  const panelSize = fullScreen ? { flex: 1 } : { maxHeight: '88%' };
 
   return (
     <Modal
@@ -52,34 +116,42 @@ export default function Sheet({
           onPress={dismissOnBackdrop ? onClose : undefined}
         />
         <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          style={styles.kav}
+          // Android Modals with a translucent status bar don't resize for the
+          // keyboard, so pad on both platforms.
+          behavior="padding"
+          style={[styles.kav, kavSize]}
           pointerEvents="box-none"
         >
-          <View style={[styles.panel, { paddingBottom: insets.bottom }]}>
-            <View style={styles.grab} />
+          <Animated.View
+            style={[
+              styles.panel,
+              panelSize,
+              { paddingBottom: insets.bottom, transform: [{ translateY: drag }] },
+            ]}
+          >
+            {/* Drag surface: grab handle + header. */}
+            <View {...pan.panHandlers}>
+              <View style={styles.grab} />
+              {(title || onClose) && (
+                <View style={styles.head}>
+                  <Text style={styles.title} numberOfLines={1}>
+                    {title}
+                  </Text>
+                  {onClose && (
+                    <Pressable style={styles.iconBtn} onPress={onClose} hitSlop={8}>
+                      <Icon name="close" size={16} color={colors.ink} />
+                    </Pressable>
+                  )}
+                </View>
+              )}
+            </View>
 
-            {(title || onClose) && (
-              <View style={styles.head}>
-                <Text style={styles.title} numberOfLines={1}>
-                  {title}
-                </Text>
-                {onClose && (
-                  <Pressable style={styles.iconBtn} onPress={onClose} hitSlop={8}>
-                    <Icon name="close" size={16} color={colors.ink} />
-                  </Pressable>
-                )}
-              </View>
-            )}
+            <Body {...bodyProps} style={scroll && fullScreen ? styles.bodyFlex : undefined}>
+              {children}
+            </Body>
 
-            <Body {...bodyProps}>{children}</Body>
-
-            {footer && (
-              <View style={styles.foot}>
-                {footer}
-              </View>
-            )}
-          </View>
+            {footer && <View style={styles.foot}>{footer}</View>}
+          </Animated.View>
         </KeyboardAvoidingView>
       </View>
     </Modal>
@@ -97,7 +169,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     borderTopLeftRadius: radii.sheet,
     borderTopRightRadius: radii.sheet,
-    maxHeight: '88%',
     overflow: 'hidden',
   },
   grab: {
@@ -128,6 +199,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  bodyFlex: { flex: 1 },
   bodyContent: { padding: 22, paddingBottom: 26 },
   foot: {
     paddingHorizontal: 22,

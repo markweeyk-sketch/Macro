@@ -83,7 +83,7 @@ export default function LogScreen() {
   }, [date, isToday]);
 
   const entries = isToday ? log : pastEntries;
-  const totals = useMemo(() => computeTotals(entries), [entries]);
+  const totals = useMemo(() => computeTotals(entries, foods), [entries, foods]);
   const remaining = Math.round(goal.kcal - totals.kcal);
 
   return (

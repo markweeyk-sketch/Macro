@@ -1,12 +1,14 @@
-// AddFoodSheet.js — RN port of the web `AddFoodSheet` (web/screens.jsx). Two
-// stages inside one bottom sheet: (1) pick a food (frequent list or search),
-// (2) choose a unit + amount and confirm. Grams math and the -1/-2 custom
-// grams/ounces unit codes match the web exactly so logged entries are portable.
+// AddFoodSheet.js — RN port of the web `AddFoodSheet` (web/screens.jsx), grown
+// into a full-screen flow: (1) pick a food (frequent list, search, your saved
+// foods, or a recipe), (2) choose a unit + amount and confirm. Grams math and
+// the -1/-2 custom grams/ounces unit codes match the web exactly so logged
+// entries are portable.
 //
 // Reads/writes through MacroData context: it's rendered once, globally, and
 // driven by `addOpen`/`addMeal` (opened by the tab-bar FAB or a meal's "add").
-// Barcode scanning is a fast-follow (expo-camera) — search only for now.
-import React, { useEffect, useMemo, useState } from 'react';
+// Also hosts the barcode scanner (expo-camera → Open Food Facts) and the food
+// editor — scanning SAVES a food (never logs it); logging stays a manual step.
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Pressable,
@@ -18,6 +20,8 @@ import { nutritionFor } from '@macro/core/data';
 import { colors, radii, spacing, fontSizes, fonts } from '@macro/core/theme';
 import Sheet from './Sheet';
 import Icon from './Icon';
+import FoodEditorSheet from './FoodEditorSheet';
+import BarcodeScannerSheet from './BarcodeScannerSheet';
 import { useMacroData, getRecipeItems } from '../state/MacroData';
 
 const MEALS = ['breakfast', 'lunch', 'dinner', 'snack'];
@@ -41,8 +45,10 @@ function gramsFor(picked, unitIndex, amount) {
 }
 
 export default function AddFoodSheet() {
-  const { addOpen, addMeal, closeAdd, addFood, logRecipe, foods, frequent, recipes } =
-    useMacroData();
+  const {
+    addOpen, addMeal, closeAdd, addFood, logRecipe, foods, customFoods,
+    frequent, recipes, saveFood, deleteFood,
+  } = useMacroData();
 
   const [q, setQ] = useState('');
   const [tab, setTab] = useState('foods'); // 'foods' | 'recipes'
@@ -50,6 +56,17 @@ export default function AddFoodSheet() {
   const [picked, setPicked] = useState(null);
   const [unitIndex, setUnitIndex] = useState(0); // -1 = grams, -2 = ounces
   const [amount, setAmount] = useState('1');
+
+  // Barcode scanner + food editor (create / edit / scanned prefill).
+  const [scanOpen, setScanOpen] = useState(false);
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [editorFood, setEditorFood] = useState(null); // existing food to edit
+  const [editorInitial, setEditorInitial] = useState(null); // scan prefill
+
+  // Scroll the search field to the top when it's focused, so the keyboard
+  // never hides the first results.
+  const scrollRef = useRef(null);
+  const searchY = useRef(0);
 
   // Reset every time the sheet opens.
   useEffect(() => {
@@ -60,6 +77,10 @@ export default function AddFoodSheet() {
       setUnitIndex(0);
       setAmount('1');
       setMeal(addMeal || 'breakfast');
+      setScanOpen(false);
+      setEditorOpen(false);
+      setEditorFood(null);
+      setEditorInitial(null);
     }
   }, [addOpen, addMeal]);
 
@@ -91,6 +112,45 @@ export default function AddFoodSheet() {
     closeAdd();
   };
 
+  // Scan result: a barcode already saved as one of the user's foods jumps
+  // straight to the amount stage; anything else opens the editor (prefilled
+  // from Open Food Facts when the product was found, blank otherwise) so it's
+  // saved as a food first — logging stays a separate, explicit step.
+  const onScanResult = ({ barcode, prefill }) => {
+    setScanOpen(false);
+    const existing = foods.find((f) => f.barcode === barcode);
+    if (existing) {
+      setPicked(existing);
+      return;
+    }
+    setEditorFood(null);
+    setEditorInitial(prefill || { barcode });
+    setEditorOpen(true);
+  };
+
+  const openNewFood = () => {
+    setEditorFood(null);
+    setEditorInitial(null);
+    setEditorOpen(true);
+  };
+
+  const openEditFood = (food) => {
+    setEditorFood(food);
+    setEditorInitial(null);
+    setEditorOpen(true);
+  };
+
+  const onEditorSave = (saved) => {
+    saveFood(saved);
+    // Editing the currently picked food: refresh the amount stage in place.
+    if (picked && picked.id === saved.id) setPicked(saved);
+  };
+
+  const onEditorDelete = (id) => {
+    deleteFood(id);
+    if (picked && picked.id === id) setPicked(null);
+  };
+
   const footer = picked ? (
     <>
       <Pressable style={[styles.btn, styles.btnGhost]} onPress={() => setPicked(null)}>
@@ -108,7 +168,14 @@ export default function AddFoodSheet() {
   );
 
   return (
-    <Sheet visible={addOpen} onClose={closeAdd} title="Add food" footer={footer}>
+    <Sheet
+      visible={addOpen}
+      onClose={closeAdd}
+      title="Add food"
+      footer={footer}
+      fullScreen
+      scrollRef={scrollRef}
+    >
       {/* Meal selector */}
       <Text style={styles.eyebrow}>Log to</Text>
       <View style={styles.chipRow}>
@@ -150,10 +217,16 @@ export default function AddFoodSheet() {
           setUnitIndex={setUnitIndex}
           amount={amount}
           setAmount={setAmount}
+          onEdit={() => openEditFood(picked)}
         />
       ) : tab === 'foods' ? (
         <>
-          <View style={styles.search}>
+          <View
+            style={styles.search}
+            onLayout={(e) => {
+              searchY.current = e.nativeEvent.layout.y;
+            }}
+          >
             <Icon name="search" size={16} color={colors.ink3} />
             <TextInput
               value={q}
@@ -162,8 +235,28 @@ export default function AddFoodSheet() {
               placeholderTextColor={colors.ink3}
               autoCapitalize="none"
               style={styles.searchInput}
+              onFocus={() =>
+                scrollRef.current?.scrollTo({
+                  y: Math.max(0, searchY.current - 10),
+                  animated: true,
+                })
+              }
             />
           </View>
+
+          {/* Scan / create tiles */}
+          {!q && (
+            <View style={styles.tileActions}>
+              <Pressable style={styles.actionTile} onPress={() => setScanOpen(true)}>
+                <Icon name="barcode" size={22} color={colors.accent} />
+                <Text style={styles.actionTileText}>Scan a barcode</Text>
+              </Pressable>
+              <Pressable style={styles.actionTile} onPress={openNewFood}>
+                <Icon name="plus" size={22} color={colors.accent} />
+                <Text style={styles.actionTileText}>New food</Text>
+              </Pressable>
+            </View>
+          )}
 
           {!q && <Text style={styles.eyebrow}>Frequent</Text>}
           {(filtered ?? frequent).map((f) => {
@@ -182,6 +275,30 @@ export default function AddFoodSheet() {
               </Pressable>
             );
           })}
+
+          {/* The user's own saved/scanned foods, newest first. */}
+          {!q && customFoods.length > 0 && (
+            <>
+              <Text style={[styles.eyebrow, { marginTop: 18 }]}>Your foods</Text>
+              {[...customFoods].reverse().map((f) => {
+                const n = nutritionFor(f, f.units[0].g);
+                return (
+                  <Pressable key={f.id} style={styles.foodRow} onPress={() => setPicked(f)}>
+                    <Text style={styles.foodEmoji}>{f.emoji}</Text>
+                    <View style={styles.foodInfo}>
+                      <Text style={styles.foodName}>{f.name}</Text>
+                      <Text style={styles.foodMeta}>
+                        {f.brand} · {f.units[0].label}
+                      </Text>
+                    </View>
+                    <Text style={styles.foodKcal}>{Math.round(n.kcal)} kcal</Text>
+                    <Icon name="plus" size={16} color={colors.ink3} />
+                  </Pressable>
+                );
+              })}
+            </>
+          )}
+
           {filtered && filtered.length === 0 && (
             <Text style={styles.empty}>No matches for “{q}”.</Text>
           )}
@@ -211,11 +328,25 @@ export default function AddFoodSheet() {
           );
         })
       )}
+
+      <BarcodeScannerSheet
+        visible={scanOpen}
+        onClose={() => setScanOpen(false)}
+        onResult={onScanResult}
+      />
+      <FoodEditorSheet
+        visible={editorOpen}
+        onClose={() => setEditorOpen(false)}
+        food={editorFood}
+        initial={editorInitial}
+        onSave={onEditorSave}
+        onDelete={onEditorDelete}
+      />
     </Sheet>
   );
 }
 
-function PickedFood({ picked, unitIndex, setUnitIndex, amount, setAmount }) {
+function PickedFood({ picked, unitIndex, setUnitIndex, amount, setAmount, onEdit }) {
   const isCustomG = unitIndex === -1;
   const isCustomOz = unitIndex === -2;
   const grams = gramsFor(picked, unitIndex, amount);
@@ -251,6 +382,11 @@ function PickedFood({ picked, unitIndex, setUnitIndex, amount, setAmount }) {
             {picked.brand} · {picked.per100.kcal} kcal / 100g
           </Text>
         </View>
+        {onEdit && (
+          <Pressable style={styles.editBtn} onPress={onEdit} hitSlop={8}>
+            <Icon name="pencil" size={16} color={colors.ink2} />
+          </Pressable>
+        )}
       </View>
 
       <Text style={styles.eyebrow}>Unit</Text>
@@ -359,6 +495,25 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.line2,
     marginBottom: 16,
+  },
+  tileActions: { flexDirection: 'row', gap: 10, marginBottom: 18 },
+  actionTile: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 18,
+    borderRadius: radii.md,
+    backgroundColor: colors.surface2,
+  },
+  actionTileText: { fontSize: 13, color: colors.ink, fontWeight: '500' },
+  editBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.surface2,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   searchInput: { flex: 1, fontSize: fontSizes.base, color: colors.ink, padding: 0 },
 
