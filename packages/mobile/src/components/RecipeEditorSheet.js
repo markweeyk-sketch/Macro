@@ -212,7 +212,14 @@ export default function RecipeEditorSheet({ visible, onClose, recipe, foods, onS
         </View>
       )}
 
-      <Text style={styles.label}>Ingredients ({items.length})</Text>
+      <Text style={styles.label}>
+        {items.length > 0 ? `Ingredients (${items.length})` : 'Ingredients'}
+      </Text>
+      {items.length === 0 && !adding && (
+        <Text style={styles.emptyHint}>
+          Nothing added yet — search below and pick foods to build this recipe.
+        </Text>
+      )}
       {items.map(({ food, grams, unitIndex }, i) => {
         const unit = unitIndex >= 0 && food.units[unitIndex] ? food.units[unitIndex] : null;
         const unitLabel = unit ? unit.label : `${Math.round(grams)}g`;
@@ -435,6 +442,14 @@ const styles = StyleSheet.create({
   ingName: { fontSize: 13, fontWeight: '500', color: colors.ink },
   ingMeta: { fontSize: 11, color: colors.ink3, marginTop: 1 },
   ingRemove: { padding: 4 },
+  emptyHint: {
+    fontSize: 12,
+    color: colors.ink3,
+    backgroundColor: colors.surface2,
+    borderRadius: radii.md,
+    padding: 12,
+    lineHeight: 17,
+  },
 
   addWrap: { marginTop: 14 },
   search: {

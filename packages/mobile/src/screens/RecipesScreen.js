@@ -161,7 +161,19 @@ export default function RecipesScreen() {
                   <Text style={styles.cardMeta}>
                     {items.length} ingredients · serves {r.serves}
                   </Text>
-                  <MacroTiles n={tot} />
+                  {/* Compact macros — the 4-tile grid doesn't fit a half-width
+                      card (values shrank unevenly, "kcal" wrapped). */}
+                  <View style={styles.cardKcalRow}>
+                    <Text style={styles.cardKcal}>{Math.round(tot.kcal)}</Text>
+                    <Text style={styles.cardKcalUnit}>kcal</Text>
+                  </View>
+                  <Text style={styles.cardMacroLine} numberOfLines={1}>
+                    <Text style={{ color: colors.pColor }}>P {Math.round(tot.p)}g</Text>
+                    <Text style={styles.cardMacroDot}>  ·  </Text>
+                    <Text style={{ color: colors.cColor }}>C {Math.round(tot.c)}g</Text>
+                    <Text style={styles.cardMacroDot}>  ·  </Text>
+                    <Text style={{ color: colors.fColor }}>F {Math.round(tot.f)}g</Text>
+                  </Text>
                   {items.length > 0 && (
                     <Text style={styles.cardIngredients} numberOfLines={1}>
                       {items.map(({ food }) => `${food.emoji} ${food.name}`).join('  ·  ')}
@@ -274,7 +286,12 @@ const styles = StyleSheet.create({
   cardHeroEmoji: { fontSize: 44 },
   cardBody: { padding: 14 },
   cardTitle: { fontSize: fontSizes.base, fontWeight: '600', color: colors.ink },
-  cardMeta: { fontSize: 11, color: colors.ink3, marginTop: 2, marginBottom: 12 },
+  cardMeta: { fontSize: 11, color: colors.ink3, marginTop: 2, marginBottom: 10 },
+  cardKcalRow: { flexDirection: 'row', alignItems: 'baseline', gap: 4 },
+  cardKcal: { fontSize: 22, fontFamily: fonts.serifMedium, color: colors.ink },
+  cardKcalUnit: { fontSize: 11, color: colors.ink3 },
+  cardMacroLine: { fontSize: 12, fontWeight: '500', marginTop: 4 },
+  cardMacroDot: { color: colors.line2 },
   cardIngredients: { fontSize: 11, color: colors.ink3, marginTop: 12 },
 
   buildCard: {
