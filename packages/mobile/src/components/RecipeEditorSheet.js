@@ -15,6 +15,7 @@ import { nutritionFor } from '@macro/core/data';
 import { colors, radii, spacing, fontSizes, fonts } from '@macro/core/theme';
 import Sheet from './Sheet';
 import Icon from './Icon';
+import FoodMonogram, { foodColor } from './FoodMonogram';
 
 const OZ_TO_G = 28.3495;
 
@@ -84,10 +85,6 @@ export default function RecipeEditorSheet({ visible, onClose, recipe, foods, onS
     [q, foods]
   );
 
-  // The recipe icon is derived from its first ingredient rather than picked by
-  // hand — one less redundant step. Falls back to a saved emoji or a plate.
-  const emoji = items[0]?.food.emoji || recipe?.emoji || '🍽️';
-
   const totals = items.reduce(
     (s, { food, grams }) => {
       const n = nutritionFor(food, grams);
@@ -145,7 +142,6 @@ export default function RecipeEditorSheet({ visible, onClose, recipe, foods, onS
           onSave({
             id: recipe?.id || 'r' + Date.now(),
             name: name.trim(),
-            emoji,
             serves,
             items: items.map(({ food, grams, unitIndex }) => ({
               foodId: food.id,
@@ -171,13 +167,15 @@ export default function RecipeEditorSheet({ visible, onClose, recipe, foods, onS
       fullScreen
       scrollRef={scrollRef}
     >
-      {/* Name — the icon is auto-derived from the first ingredient */}
+      {/* Name — the icon is a colored monogram, tinted by the first ingredient */}
       <View style={styles.nameRow}>
         <View>
           <Text style={styles.label}>Icon</Text>
-          <View style={styles.iconPreview}>
-            <Text style={styles.iconPreviewText}>{emoji}</Text>
-          </View>
+          <FoodMonogram
+            label={name || 'Recipe'}
+            color={items[0] ? foodColor(items[0].food) : colors.accent}
+            size={56}
+          />
         </View>
         <View style={styles.flex1}>
           <Text style={styles.label}>Name</Text>
@@ -226,7 +224,7 @@ export default function RecipeEditorSheet({ visible, onClose, recipe, foods, onS
         const n = nutritionFor(food, grams);
         return (
           <View key={i} style={styles.ingRow}>
-            <Text style={styles.ingEmoji}>{food.emoji}</Text>
+            <FoodMonogram food={food} size={34} />
             <View style={styles.flex1}>
               <Text style={styles.ingName}>{food.name}</Text>
               <Text style={styles.ingMeta}>
@@ -274,7 +272,7 @@ export default function RecipeEditorSheet({ visible, onClose, recipe, foods, onS
           {filtered &&
             filtered.map((f) => (
               <Pressable key={f.id} style={styles.searchRow} onPress={() => startAdding(f)}>
-                <Text style={styles.ingEmoji}>{f.emoji}</Text>
+                <FoodMonogram food={f} size={34} />
                 <View style={styles.flex1}>
                   <Text style={styles.ingName}>{f.name}</Text>
                   <Text style={styles.ingMeta}>{f.brand}</Text>
@@ -286,9 +284,7 @@ export default function RecipeEditorSheet({ visible, onClose, recipe, foods, onS
       ) : (
         <View style={styles.addWrap}>
           <View style={styles.addingHead}>
-            <View style={styles.addingEmojiWrap}>
-              <Text style={styles.addingEmoji}>{adding.emoji}</Text>
-            </View>
+            <FoodMonogram food={adding} size={52} />
             <View style={styles.flex1}>
               <Text style={styles.addingName}>{adding.name}</Text>
               <Text style={styles.ingMeta}>{adding.brand}</Text>
@@ -377,15 +373,6 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   nameRow: { flexDirection: 'row', gap: 12, alignItems: 'flex-end', marginBottom: 14 },
-  iconPreview: {
-    width: 56,
-    height: 56,
-    borderRadius: 16,
-    backgroundColor: colors.surface2,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  iconPreviewText: { fontSize: 28 },
   nameInput: {
     backgroundColor: colors.surface2,
     borderRadius: 12,
@@ -438,7 +425,6 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.line,
   },
-  ingEmoji: { fontSize: 20, width: 36, textAlign: 'center' },
   ingName: { fontSize: 13, fontWeight: '500', color: colors.ink },
   ingMeta: { fontSize: 11, color: colors.ink3, marginTop: 1 },
   ingRemove: { padding: 4 },
@@ -474,15 +460,6 @@ const styles = StyleSheet.create({
   },
 
   addingHead: { flexDirection: 'row', gap: 12, alignItems: 'center', marginBottom: 14 },
-  addingEmojiWrap: {
-    width: 52,
-    height: 52,
-    borderRadius: 14,
-    backgroundColor: colors.surface2,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  addingEmoji: { fontSize: 26 },
   addingName: { fontSize: 18, fontFamily: fonts.serifMedium, color: colors.ink },
   chipWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 12 },
   chip: { paddingVertical: 7, paddingHorizontal: 14, borderRadius: radii.pill },

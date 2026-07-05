@@ -14,6 +14,7 @@ import { colors, radii, spacing, fontSizes, fonts } from '@macro/core/theme';
 import { useMacroData, getRecipeItems } from '../state/MacroData';
 import Sheet from '../components/Sheet';
 import Icon from '../components/Icon';
+import FoodMonogram from '../components/FoodMonogram';
 
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const SLOTS = ['breakfast', 'lunch', 'dinner', 'snack'];
@@ -151,7 +152,7 @@ export default function PlanScreen() {
             <View style={styles.shopGrid}>
               {shoppingItems.map((f) => (
                 <View key={f.id} style={styles.shopItem}>
-                  <Text style={styles.shopEmoji}>{f.emoji}</Text>
+                  <FoodMonogram food={f} size={30} />
                   <View style={styles.flexShrink}>
                     <Text style={styles.shopName} numberOfLines={1}>
                       {f.name}
@@ -190,7 +191,7 @@ export default function PlanScreen() {
               style={styles.recipeRow}
               onPress={() => picking && setPlanSlot(picking.dayIndex, picking.slot, r.id)}
             >
-              <Text style={styles.recipeEmoji}>{r.emoji}</Text>
+              <FoodMonogram label={r.name} color={colors.accent} size={40} />
               <View style={styles.flexShrink}>
                 <Text style={styles.recipeName}>{r.name}</Text>
                 <Text style={styles.recipeMeta}>
@@ -219,7 +220,7 @@ function PlanSlot({ slot, recipe, onPick, onRemove }) {
     <View style={styles.slotFilled}>
       <Text style={styles.slotLabel}>{slot}</Text>
       <View style={styles.slotBody}>
-        <Text style={styles.slotEmoji}>{recipe.emoji}</Text>
+        <FoodMonogram label={recipe.name} color={colors.accent} size={22} />
         <Text style={styles.slotName} numberOfLines={1}>
           {recipe.name}
         </Text>
@@ -313,7 +314,6 @@ const styles = StyleSheet.create({
     color: colors.ink3,
   },
   slotBody: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 },
-  slotEmoji: { fontSize: 16 },
   slotName: { fontSize: 12, fontWeight: '500', color: colors.ink, flex: 1 },
   slotBtn: { padding: 3 },
 
@@ -353,7 +353,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface2,
     width: '48%',
   },
-  shopEmoji: { fontSize: 20 },
   flexShrink: { flexShrink: 1, minWidth: 0 },
   shopName: { fontSize: 13, fontWeight: '500', color: colors.ink },
   shopUnit: { fontSize: 11, color: colors.ink3 },
@@ -376,7 +375,6 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.line,
   },
-  recipeEmoji: { fontSize: 28 },
   recipeName: { fontSize: 14, fontWeight: '500', color: colors.ink },
   recipeMeta: { fontSize: 12, color: colors.ink3, marginTop: 1 },
 });

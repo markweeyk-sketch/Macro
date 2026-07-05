@@ -14,6 +14,7 @@ import { useMacroData, getRecipeItems } from '../state/MacroData';
 import Sheet from '../components/Sheet';
 import RecipeEditorSheet from '../components/RecipeEditorSheet';
 import Icon from '../components/Icon';
+import FoodMonogram from '../components/FoodMonogram';
 
 function recipeTotals(items) {
   return items.reduce(
@@ -151,9 +152,7 @@ export default function RecipesScreen() {
             const tot = recipeTotals(items);
             return (
               <Pressable key={r.id} style={styles.recipeCard} onPress={() => openView(r)}>
-                <View style={styles.cardThumb}>
-                  <Text style={styles.cardThumbEmoji}>{r.emoji}</Text>
-                </View>
+                <FoodMonogram label={r.name} color={colors.accent} size={56} />
                 {/* Full-width row: title + meta + macros on the left, the
                     calorie total on the right. Roomy enough that nothing wraps. */}
                 <View style={styles.cardMain}>
@@ -195,7 +194,7 @@ export default function RecipesScreen() {
       <Sheet
         visible={!!viewRecipe}
         onClose={closeView}
-        title={viewRecipe ? `${viewRecipe.emoji}  ${viewRecipe.name}` : ''}
+        title={viewRecipe ? viewRecipe.name : ''}
         footer={viewFooter}
       >
         {viewRecipe && (
@@ -212,7 +211,7 @@ export default function RecipesScreen() {
               const unit = food.units[unitIndex] || food.units[0];
               return (
                 <View key={food.id} style={styles.detailRow}>
-                  <Text style={styles.detailEmoji}>{food.emoji}</Text>
+                  <FoodMonogram food={food} size={34} />
                   <View style={styles.flex1}>
                     <Text style={styles.detailName}>{food.name}</Text>
                     <Text style={styles.detailUnit}>{unit.label}</Text>
@@ -276,15 +275,6 @@ const styles = StyleSheet.create({
     borderColor: colors.line,
     padding: 14,
   },
-  cardThumb: {
-    width: 56,
-    height: 56,
-    borderRadius: 16,
-    backgroundColor: colors.surface2,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  cardThumbEmoji: { fontSize: 30 },
   cardMain: { flex: 1, minWidth: 0 },
   cardTitle: { fontSize: fontSizes.base, fontWeight: '600', color: colors.ink },
   cardMeta: { fontSize: 11, color: colors.ink3, marginTop: 2 },
@@ -353,7 +343,6 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.line,
   },
-  detailEmoji: { fontSize: 20, width: 36, textAlign: 'center' },
   detailName: { fontSize: 14, fontWeight: '500', color: colors.ink },
   detailUnit: { fontSize: 12, color: colors.ink3, marginTop: 1 },
   detailKcal: { fontSize: 13, color: colors.ink2 },

@@ -54,12 +54,17 @@ function mapProduct(code, product) {
 export default function BarcodeScannerSheet({ visible, onClose, onResult }) {
   const insets = useSafeAreaInsets();
   const [permission, requestPermission] = useCameraPermissions();
-  const [status, setStatus] = useState('scan'); // 'scan' | 'lookup' | 'error'
+  // 'scan' | 'lookup' | 'notfound' | 'error'. 'notfound'/'error' hold the flow
+  // on an explanatory screen with a choice, rather than silently darting to the
+  // manual editor, so a miss is never confusing.
+  const [status, setStatus] = useState('scan');
+  const [scanned, setScanned] = useState(null); // the last code scanned
   const busyRef = useRef(false);
 
   useEffect(() => {
     if (visible) {
       setStatus('scan');
+      setScanned(null);
       busyRef.current = false;
       if (permission && !permission.granted && permission.canAskAgain) {
         requestPermission();
@@ -71,6 +76,7 @@ export default function BarcodeScannerSheet({ visible, onClose, onResult }) {
   const onScanned = async ({ data: code }) => {
     if (busyRef.current || !code) return;
     busyRef.current = true;
+    setScanned(code);
     setStatus('lookup');
     try {
       const controller = new AbortController();
@@ -81,14 +87,21 @@ export default function BarcodeScannerSheet({ visible, onClose, onResult }) {
       if (json?.status === 1 && json.product) {
         onResult({ barcode: code, prefill: mapProduct(code, json.product) });
       } else {
-        onResult({ barcode: code, prefill: null }); // not in the database
+        setStatus('notfound'); // scanned fine, but no product in the database
       }
     } catch {
-      // Offline or OFF unreachable — still hand the barcode over so the user
-      // can enter the label values themselves.
-      onResult({ barcode: code, prefill: null });
+      setStatus('error'); // offline or Open Food Facts unreachable
     }
   };
+
+  // Reset to live scanning (from the not-found / error screen).
+  const rescan = () => {
+    busyRef.current = false;
+    setStatus('scan');
+  };
+
+  // Proceed to the manual editor with just the barcode attached.
+  const enterManually = () => onResult({ barcode: scanned, prefill: null });
 
   const denied = permission && !permission.granted && !permission.canAskAgain;
 
@@ -143,6 +156,25 @@ export default function BarcodeScannerSheet({ visible, onClose, onResult }) {
             </>
           ) : status === 'lookup' ? (
             <Text style={styles.hint}>Looking up product…</Text>
+          ) : status === 'notfound' || status === 'error' ? (
+            <>
+              <Text style={styles.hint}>
+                {status === 'notfound'
+                  ? "This barcode isn't in the food database."
+                  : "Couldn't reach the food database."}
+              </Text>
+              {scanned ? (
+                <Text style={styles.hintSmall}>Barcode {scanned}</Text>
+              ) : null}
+              <View style={styles.actionRow}>
+                <Pressable style={styles.ghostBtn} onPress={rescan}>
+                  <Text style={styles.ghostBtnText}>Scan again</Text>
+                </Pressable>
+                <Pressable style={styles.permBtn} onPress={enterManually}>
+                  <Text style={styles.permBtnText}>Enter it manually</Text>
+                </Pressable>
+              </View>
+            </>
           ) : (
             <Text style={styles.hint}>
               Point at the barcode — it scans automatically.
@@ -196,4 +228,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 26,
   },
   permBtnText: { color: '#fff', fontWeight: '600', fontSize: fontSizes.base },
+  actionRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  ghostBtn: {
+    marginTop: 14,
+    backgroundColor: 'rgba(255,255,255,0.16)',
+    borderRadius: radii.pill,
+    paddingVertical: 12,
+    paddingHorizontal: 22,
+  },
+  ghostBtnText: { color: '#fff', fontWeight: '500', fontSize: fontSizes.base },
 });

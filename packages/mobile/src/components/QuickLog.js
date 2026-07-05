@@ -2,10 +2,11 @@
 // horizontally scrolling row of frequent foods; tapping one logs its default
 // serving straight away.
 import React from 'react';
-import { ScrollView, Pressable, View, StyleSheet } from 'react-native';
+import { ScrollView, Pressable, StyleSheet } from 'react-native';
 import { Text } from '../ui/type';
 import { nutritionFor } from '@macro/core/data';
 import { colors, radii } from '@macro/core/theme';
+import FoodMonogram from './FoodMonogram';
 
 export default function QuickLog({ foods, onAdd }) {
   return (
@@ -16,9 +17,7 @@ export default function QuickLog({ foods, onAdd }) {
     >
       {foods.map((f) => (
         <Pressable key={f.id} style={styles.chip} onPress={() => onAdd(f)}>
-          <View style={styles.emojiWrap}>
-            <Text style={styles.emoji}>{f.emoji}</Text>
-          </View>
+          <FoodMonogram food={f} size={28} />
           <Text style={styles.name}>{f.name}</Text>
           <Text style={styles.kcal}>
             {Math.round(nutritionFor(f, f.units[0].g).kcal)}
@@ -43,15 +42,6 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.line,
   },
-  emojiWrap: {
-    width: 28,
-    height: 28,
-    borderRadius: 8,
-    backgroundColor: colors.surface2,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  emoji: { fontSize: 14 },
   name: { fontSize: 13, fontWeight: '500', color: colors.ink },
   kcal: { fontSize: 12, color: colors.ink3 },
 });

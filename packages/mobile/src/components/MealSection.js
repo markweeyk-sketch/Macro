@@ -7,6 +7,7 @@ import { Text } from '../ui/type';
 import { nutritionFor } from '@macro/core/data';
 import { colors, fontSizes, fonts } from '@macro/core/theme';
 import Icon from './Icon';
+import FoodMonogram from './FoodMonogram';
 
 export default function MealSection({ meal, label, items, foods, onAdd, onRemove, readOnly = false }) {
   const total = items.reduce((s, it) => {
@@ -46,7 +47,7 @@ export default function MealSection({ meal, label, items, foods, onAdd, onRemove
             const unitLabel = unit ? unit.label : `${Math.round(it.grams)}g`;
             return (
               <View key={it.id} style={styles.foodRow}>
-                <Text style={styles.foodEmoji}>{f.emoji}</Text>
+                <FoodMonogram food={f} size={34} />
                 <View style={styles.foodInfo}>
                   <Text style={styles.foodName}>{f.name}</Text>
                   <Text style={styles.foodMeta}>
@@ -99,7 +100,6 @@ const styles = StyleSheet.create({
   emptyAddText: { fontSize: 14, color: colors.ink3 },
   emptyReadOnly: { fontSize: 14, color: colors.ink3, paddingVertical: 12 },
   foodRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10 },
-  foodEmoji: { fontSize: 22, width: 28, textAlign: 'center' },
   foodInfo: { flex: 1 },
   foodName: { fontSize: 14, color: colors.ink, fontWeight: '500' },
   foodMeta: { fontSize: 12, color: colors.ink3, marginTop: 1 },

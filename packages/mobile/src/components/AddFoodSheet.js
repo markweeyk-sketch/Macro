@@ -20,6 +20,7 @@ import { nutritionFor } from '@macro/core/data';
 import { colors, radii, spacing, fontSizes, fonts } from '@macro/core/theme';
 import Sheet from './Sheet';
 import Icon from './Icon';
+import FoodMonogram from './FoodMonogram';
 import FoodEditorSheet from './FoodEditorSheet';
 import BarcodeScannerSheet from './BarcodeScannerSheet';
 import { useMacroData, getRecipeItems } from '../state/MacroData';
@@ -263,7 +264,7 @@ export default function AddFoodSheet() {
             const n = nutritionFor(f, f.units[0].g);
             return (
               <Pressable key={f.id} style={styles.foodRow} onPress={() => setPicked(f)}>
-                <Text style={styles.foodEmoji}>{f.emoji}</Text>
+                <FoodMonogram food={f} size={36} />
                 <View style={styles.foodInfo}>
                   <Text style={styles.foodName}>{f.name}</Text>
                   <Text style={styles.foodMeta}>
@@ -284,7 +285,7 @@ export default function AddFoodSheet() {
                 const n = nutritionFor(f, f.units[0].g);
                 return (
                   <Pressable key={f.id} style={styles.foodRow} onPress={() => setPicked(f)}>
-                    <Text style={styles.foodEmoji}>{f.emoji}</Text>
+                    <FoodMonogram food={f} size={36} />
                     <View style={styles.foodInfo}>
                       <Text style={styles.foodName}>{f.name}</Text>
                       <Text style={styles.foodMeta}>
@@ -313,7 +314,7 @@ export default function AddFoodSheet() {
           const tot = recipeTotals(items);
           return (
             <Pressable key={r.id} style={styles.foodRow} onPress={() => logThisRecipe(r)}>
-              <Text style={styles.foodEmoji}>{r.emoji}</Text>
+              <FoodMonogram label={r.name} color={colors.accent} size={36} />
               <View style={styles.foodInfo}>
                 <Text style={styles.foodName} numberOfLines={1}>
                   {r.name}
@@ -373,9 +374,7 @@ function PickedFood({ picked, unitIndex, setUnitIndex, amount, setAmount, onEdit
   return (
     <View>
       <View style={styles.pickedHead}>
-        <View style={styles.pickedEmojiWrap}>
-          <Text style={styles.pickedEmoji}>{picked.emoji}</Text>
-        </View>
+        <FoodMonogram food={picked} size={72} />
         <View style={{ flex: 1 }}>
           <Text style={styles.pickedName}>{picked.name}</Text>
           <Text style={styles.pickedMeta}>
@@ -525,7 +524,6 @@ const styles = StyleSheet.create({
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.line,
   },
-  foodEmoji: { fontSize: 24, width: 32, textAlign: 'center' },
   foodInfo: { flex: 1 },
   foodName: { fontSize: 14, color: colors.ink, fontWeight: '500' },
   foodMeta: { fontSize: 12, color: colors.ink3, marginTop: 1 },
@@ -533,15 +531,6 @@ const styles = StyleSheet.create({
   empty: { paddingVertical: 40, textAlign: 'center', color: colors.ink3 },
 
   pickedHead: { flexDirection: 'row', gap: 14, alignItems: 'center', marginBottom: 18 },
-  pickedEmojiWrap: {
-    width: 72,
-    height: 72,
-    borderRadius: 16,
-    backgroundColor: colors.surface2,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  pickedEmoji: { fontSize: 32 },
   pickedName: { fontSize: 22, fontFamily: fonts.serifMedium, color: colors.ink },
   pickedMeta: { fontSize: 13, color: colors.ink3, marginTop: 2 },
 

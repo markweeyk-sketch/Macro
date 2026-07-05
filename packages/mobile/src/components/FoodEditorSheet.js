@@ -14,6 +14,7 @@ import { FOODS } from '@macro/core/data';
 import { colors, radii, fontSizes, fonts } from '@macro/core/theme';
 import Sheet from './Sheet';
 import Icon from './Icon';
+import FoodMonogram from './FoodMonogram';
 
 const num = (s) => Math.max(0, +String(s).replace(/[^0-9.]/g, '') || 0);
 
@@ -27,7 +28,6 @@ export default function FoodEditorSheet({
 }) {
   const [name, setName] = useState('');
   const [brand, setBrand] = useState('');
-  const [emoji, setEmoji] = useState('🍽️');
   const [kcal, setKcal] = useState('');
   const [p, setP] = useState('');
   const [c, setC] = useState('');
@@ -45,7 +45,6 @@ export default function FoodEditorSheet({
     const src = food || initial;
     setName(src?.name || '');
     setBrand(src?.brand || '');
-    setEmoji(src?.emoji || (initial?.barcode ? '📦' : '🍽️'));
     setKcal(src?.per100 ? String(src.per100.kcal) : '');
     setP(src?.per100 ? String(src.per100.p) : '');
     setC(src?.per100 ? String(src.per100.c) : '');
@@ -75,7 +74,6 @@ export default function FoodEditorSheet({
       id: food?.id || 'cf' + Date.now(),
       name: name.trim(),
       brand: brand.trim() || 'Custom',
-      emoji: emoji.trim() || '🍽️',
       per100: { kcal: num(kcal), p: num(p), c: num(c), f: num(f) },
       units: units.length ? units : [{ label: '100 g', g: 100 }],
     };
@@ -114,15 +112,13 @@ export default function FoodEditorSheet({
         </Text>
       )}
 
-      {/* Icon + name */}
+      {/* Icon (auto — a colored monogram tinted by the dominant macro) + name */}
       <View style={styles.row}>
         <View>
           <Text style={styles.label}>Icon</Text>
-          <TextInput
-            value={emoji}
-            onChangeText={(t) => setEmoji(t.slice(-4))}
-            style={styles.emojiInput}
-            textAlign="center"
+          <FoodMonogram
+            food={{ name, per100: { p: num(p), c: num(c), f: num(f) } }}
+            size={56}
           />
         </View>
         <View style={styles.flex1}>
@@ -268,15 +264,6 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   row: { flexDirection: 'row', gap: 12, alignItems: 'flex-end', marginBottom: 14 },
-  emojiInput: {
-    width: 56,
-    height: 56,
-    borderRadius: 16,
-    backgroundColor: colors.surface2,
-    fontSize: 26,
-    color: colors.ink,
-    padding: 0,
-  },
   nameInput: {
     backgroundColor: colors.surface2,
     borderRadius: 12,
