@@ -18,6 +18,7 @@ export const KEYS = {
   weights:     'macro.weights',
   customFoods: 'macro.customFoods',
   overrides:   'macro.foodOverrides',
+  theme:       'macro.theme',
 };
 
 // ─── Imperative JSON helpers ─────────────────────────────────────────────────

@@ -98,6 +98,14 @@ export default function EditProfileSheet({ visible, onClose, goal, onSave }) {
           onSave({
             ...goal,
             ...calculated,
+            // calcGoal only returns the derived targets (kcal/macros) plus
+            // weight fields — it does NOT echo back the biometric inputs, so
+            // carry the edited ones through explicitly or they revert to the
+            // previous goal's values on the next open.
+            sex,
+            age: +age,
+            heightCm: +heightCm,
+            activity,
             startKg: goal.startKg,
             streak: goal.streak,
             onboarded: true,

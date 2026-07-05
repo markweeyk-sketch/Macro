@@ -9,15 +9,45 @@
 // The web SettingsSheet's appearance/tweaks (theme, dashboard layout) are
 // intentionally dropped on mobile; the multi-step OnboardingSheet is deferred —
 // the editor here does first-run goal setup (a default goal works until then).
-import React, { useState } from 'react';
-import { View, ScrollView, Pressable, StyleSheet } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, ScrollView, Pressable, StyleSheet, DevSettings } from 'react-native';
+import * as Updates from 'expo-updates';
 import { Text } from '../ui/type';
 import { auth, signOutUser, sendPasswordReset } from '@macro/core/firebase';
-import { colors, radii, spacing, fontSizes, fonts } from '@macro/core/theme';
+import {
+  colors,
+  radii,
+  spacing,
+  fontSizes,
+  fonts,
+  themeKeys,
+  themeSwatches,
+  defaultThemeKey,
+} from '@macro/core/theme';
 import { useMacroData } from '../state/MacroData';
+import { KEYS, getJSON, setJSON } from '../lib/storage';
 import Sheet from '../components/Sheet';
 import EditProfileSheet from '../components/EditProfileSheet';
 import Icon from '../components/Icon';
+
+const THEME_LABELS = { bone: 'Bone', graphite: 'Graphite', citrus: 'Citrus', marine: 'Marine' };
+
+// Re-boot the JS so every screen's StyleSheet rebuilds against the new palette
+// (index.js re-applies the persisted theme on boot). Production build → the
+// OTA/embedded reload; dev client → DevSettings.
+async function reloadApp() {
+  try {
+    if (Updates.isEnabled) {
+      await Updates.reloadAsync();
+      return;
+    }
+  } catch {
+    // fall through to the dev reloader
+  }
+  try {
+    DevSettings.reload();
+  } catch {}
+}
 
 export default function ProfileScreen() {
   const user = auth.currentUser;
@@ -26,6 +56,22 @@ export default function ProfileScreen() {
   const [editOpen, setEditOpen] = useState(false);
   const [pwMsg, setPwMsg] = useState('');
   const [resetStep, setResetStep] = useState(0); // 0 = idle, 1 = confirm
+  const [themeKey, setThemeKey] = useState(defaultThemeKey);
+  const [themeBusy, setThemeBusy] = useState(false);
+
+  useEffect(() => {
+    getJSON(KEYS.theme, defaultThemeKey).then(setThemeKey);
+  }, []);
+
+  // Persist the chosen theme, then re-boot so the whole UI restyles. Ignore a
+  // tap on the already-active theme (no point reloading).
+  const pickTheme = async (k) => {
+    if (k === themeKey || themeBusy) return;
+    setThemeBusy(true);
+    setThemeKey(k);
+    await setJSON(KEYS.theme, k);
+    reloadApp();
+  };
 
   const name = user?.displayName || user?.email || '';
   const initial = (name.trim()[0] || '?').toUpperCase();
@@ -168,6 +214,46 @@ export default function ProfileScreen() {
                   {!pwMsg && <Icon name="arrowR" size={16} color={colors.ink3} />}
                 </Pressable>
               )}
+            </View>
+
+            <Text style={styles.sectionEyebrow}>Appearance</Text>
+            <View style={styles.settingsCard}>
+              <View style={styles.themeRow}>
+                {themeKeys.map((k) => {
+                  const [bg, ink, accent] = themeSwatches[k];
+                  const on = k === themeKey;
+                  return (
+                    <Pressable
+                      key={k}
+                      style={styles.themeTile}
+                      onPress={() => pickTheme(k)}
+                      disabled={themeBusy}
+                    >
+                      <View
+                        style={[
+                          styles.themeSwatch,
+                          { backgroundColor: bg, borderColor: on ? colors.ink : colors.line2 },
+                          on && styles.themeSwatchOn,
+                        ]}
+                      >
+                        <View style={[styles.swatchDot, { backgroundColor: ink }]} />
+                        <View style={[styles.swatchDot, { backgroundColor: accent, marginLeft: -5 }]} />
+                        {on && (
+                          <View style={styles.themeCheck}>
+                            <Icon name="check" size={10} color={bg} />
+                          </View>
+                        )}
+                      </View>
+                      <Text style={[styles.themeName, on && styles.themeNameOn]}>
+                        {THEME_LABELS[k]}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+              <Text style={styles.themeNote}>
+                Changing the theme briefly refreshes the app.
+              </Text>
             </View>
 
             <Text style={styles.sectionEyebrow}>Data</Text>
@@ -349,6 +435,40 @@ const styles = StyleSheet.create({
   },
   settingLabel: { fontSize: fontSizes.base, fontWeight: '500', color: colors.ink },
   settingSub: { fontSize: 12, color: colors.ink3, marginTop: 2 },
+  themeRow: { flexDirection: 'row', gap: 10, paddingTop: 14 },
+  themeTile: { flex: 1, alignItems: 'center', gap: 8 },
+  themeSwatch: {
+    width: '100%',
+    height: 46,
+    borderRadius: 12,
+    borderWidth: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  themeSwatchOn: { borderWidth: 2 },
+  swatchDot: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(0,0,0,0.12)',
+  },
+  themeCheck: {
+    position: 'absolute',
+    top: -6,
+    right: -6,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: colors.ink,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  themeName: { fontSize: 11, color: colors.ink3 },
+  themeNameOn: { color: colors.ink, fontWeight: '600' },
+  themeNote: { fontSize: 11, color: colors.ink3, paddingTop: 12, paddingBottom: 14 },
+
   confirmInline: { paddingVertical: 16 },
   confirmTitle: { fontSize: 14, fontWeight: '600', color: colors.warn, marginBottom: 6 },
   confirmSub: { fontSize: 12, color: colors.ink2, lineHeight: 19, marginBottom: 14 },

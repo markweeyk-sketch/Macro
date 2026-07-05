@@ -145,28 +145,24 @@ export default function RecipesScreen() {
           </Pressable>
         </View>
 
-        <View style={styles.grid}>
+        <View style={styles.list}>
           {recipes.map((r) => {
             const items = getRecipeItems(r, foods);
             const tot = recipeTotals(items);
             return (
               <Pressable key={r.id} style={styles.recipeCard} onPress={() => openView(r)}>
-                <View style={styles.cardHero}>
-                  <Text style={styles.cardHeroEmoji}>{r.emoji}</Text>
+                <View style={styles.cardThumb}>
+                  <Text style={styles.cardThumbEmoji}>{r.emoji}</Text>
                 </View>
-                <View style={styles.cardBody}>
+                {/* Full-width row: title + meta + macros on the left, the
+                    calorie total on the right. Roomy enough that nothing wraps. */}
+                <View style={styles.cardMain}>
                   <Text style={styles.cardTitle} numberOfLines={1}>
                     {r.name}
                   </Text>
-                  <Text style={styles.cardMeta}>
+                  <Text style={styles.cardMeta} numberOfLines={1}>
                     {items.length} ingredients · serves {r.serves}
                   </Text>
-                  {/* Compact macros — the 4-tile grid doesn't fit a half-width
-                      card (values shrank unevenly, "kcal" wrapped). */}
-                  <View style={styles.cardKcalRow}>
-                    <Text style={styles.cardKcal}>{Math.round(tot.kcal)}</Text>
-                    <Text style={styles.cardKcalUnit}>kcal</Text>
-                  </View>
                   <Text style={styles.cardMacroLine} numberOfLines={1}>
                     <Text style={{ color: colors.pColor }}>P {Math.round(tot.p)}g</Text>
                     <Text style={styles.cardMacroDot}>  ·  </Text>
@@ -174,11 +170,10 @@ export default function RecipesScreen() {
                     <Text style={styles.cardMacroDot}>  ·  </Text>
                     <Text style={{ color: colors.fColor }}>F {Math.round(tot.f)}g</Text>
                   </Text>
-                  {items.length > 0 && (
-                    <Text style={styles.cardIngredients} numberOfLines={1}>
-                      {items.map(({ food }) => `${food.emoji} ${food.name}`).join('  ·  ')}
-                    </Text>
-                  )}
+                </View>
+                <View style={styles.cardRight}>
+                  <Text style={styles.cardKcal}>{Math.round(tot.kcal)}</Text>
+                  <Text style={styles.cardKcalUnit}>kcal</Text>
                 </View>
               </Pressable>
             );
@@ -188,8 +183,10 @@ export default function RecipesScreen() {
             <View style={styles.buildIcon}>
               <Icon name="plus" size={20} color={colors.ink} />
             </View>
-            <Text style={styles.buildTitle}>Build a recipe</Text>
-            <Text style={styles.buildSub}>Combine foods you eat together</Text>
+            <View style={styles.flex1}>
+              <Text style={styles.buildTitle}>Build a recipe</Text>
+              <Text style={styles.buildSub}>Combine foods you eat together</Text>
+            </View>
           </Pressable>
         </View>
       </ScrollView>
@@ -268,42 +265,45 @@ const styles = StyleSheet.create({
   },
   newBtnText: { fontSize: 13, fontWeight: '600', color: colors.bg },
 
-  grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', rowGap: spacing.lg },
+  list: { gap: spacing.md },
   recipeCard: {
-    width: '48%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
     backgroundColor: colors.surface,
     borderRadius: radii.lg,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.line,
-    overflow: 'hidden',
+    padding: 14,
   },
-  cardHero: {
-    height: 90,
+  cardThumb: {
+    width: 56,
+    height: 56,
+    borderRadius: 16,
     backgroundColor: colors.surface2,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  cardHeroEmoji: { fontSize: 44 },
-  cardBody: { padding: 14 },
+  cardThumbEmoji: { fontSize: 30 },
+  cardMain: { flex: 1, minWidth: 0 },
   cardTitle: { fontSize: fontSizes.base, fontWeight: '600', color: colors.ink },
-  cardMeta: { fontSize: 11, color: colors.ink3, marginTop: 2, marginBottom: 10 },
-  cardKcalRow: { flexDirection: 'row', alignItems: 'baseline', gap: 4 },
-  cardKcal: { fontSize: 22, fontFamily: fonts.serifMedium, color: colors.ink },
-  cardKcalUnit: { fontSize: 11, color: colors.ink3 },
-  cardMacroLine: { fontSize: 12, fontWeight: '500', marginTop: 4 },
+  cardMeta: { fontSize: 11, color: colors.ink3, marginTop: 2 },
+  cardMacroLine: { fontSize: 12, fontWeight: '500', marginTop: 6 },
   cardMacroDot: { color: colors.line2 },
-  cardIngredients: { fontSize: 11, color: colors.ink3, marginTop: 12 },
+  cardRight: { alignItems: 'flex-end', paddingLeft: 6 },
+  cardKcal: { fontSize: 24, fontFamily: fonts.serifMedium, color: colors.ink },
+  cardKcalUnit: { fontSize: 11, color: colors.ink3, marginTop: -2 },
 
   buildCard: {
-    width: '48%',
-    minHeight: 220,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
     borderRadius: radii.lg,
     borderWidth: 2,
     borderStyle: 'dashed',
     borderColor: colors.line2,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 16,
+    padding: 14,
+    marginTop: spacing.xs,
   },
   buildIcon: {
     width: 48,
@@ -312,10 +312,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface2,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 10,
   },
   buildTitle: { fontSize: fontSizes.lg, fontWeight: '600', color: colors.ink },
-  buildSub: { fontSize: 12, color: colors.ink3, marginTop: 4, textAlign: 'center' },
+  buildSub: { fontSize: 12, color: colors.ink3, marginTop: 2 },
 
   // Shared macro tiles
   tileRow: { flexDirection: 'row', gap: 6 },

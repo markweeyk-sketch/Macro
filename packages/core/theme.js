@@ -83,11 +83,24 @@ export const themeSwatches = themeKeys.reduce((acc, k) => {
   return acc;
 }, {});
 
-// Default palette for components that don't switch themes yet.
-export const colors = themes[defaultThemeKey];
+// The live palette every component imports. It is a *copy* of the default
+// theme (not a reference to themes[defaultThemeKey]) so applyTheme can mutate it
+// in place without corrupting the source palettes. On mobile the persisted theme
+// is applied via applyTheme() at boot (index.js) before any screen's
+// StyleSheet.create reads these values; changing the theme re-boots the JS so
+// the stylesheets rebuild against the new palette.
+export const colors = { ...themes[defaultThemeKey] };
 
 export function getTheme(key) {
   return themes[key] || themes[defaultThemeKey];
+}
+
+// Overwrite the live `colors` object in place with the given theme's palette.
+// Mutation (not reassignment) is deliberate: modules already hold the `colors`
+// reference, so mutating it updates every consumer that reads at render time.
+export function applyTheme(key) {
+  Object.assign(colors, getTheme(key));
+  return colors;
 }
 
 // ─── Radii (mirrors --r-* plus the pill/sheet radii used in styles.css) ──────
@@ -153,6 +166,7 @@ export default {
   defaultThemeKey,
   colors,
   getTheme,
+  applyTheme,
   radii,
   spacing,
   fontSizes,
